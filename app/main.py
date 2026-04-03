@@ -13,6 +13,7 @@ from datetime import datetime
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from fastapi.security import APIKeyCookie
+import traceback
 from dotenv import load_dotenv
 from pathlib import Path
 from .core.database import supabase
@@ -39,6 +40,18 @@ SECRET_KEY = os.getenv("SECRET_KEY", "FURNITURE_MONITOR_SECRET_PROD")
 ALGORITHM = "HS256"
 COOKIE_NAME = "auth_token"
 auth_cookie = APIKeyCookie(name=COOKIE_NAME, auto_error=False)
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global debugger for Vercel 500 errors"""
+    return JSONResponse(
+        status_code=500,
+        content={
+            "status": "error",
+            "message": str(exc),
+            "traceback": traceback.format_exc()
+        }
+    )
 
 def create_access_token(data: dict):
     to_encode = data.copy()

@@ -8,3 +8,5 @@ supabase
 python-dotenv
 apscheduler
 PyJWT
+starlette
+httpx

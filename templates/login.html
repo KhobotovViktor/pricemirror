@@ -3,47 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Вход | Furniture Monitor</title>
+    <title>Вход | Monitor.PRO</title>
     <link rel="stylesheet" href="/static/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
-    <style>
-        body {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            background: radial-gradient(circle at top left, #1e293b, #0f172a);
-        }
-        .login-card {
-            width: 100%;
-            max-width: 400px;
-            padding: 3rem;
-            text-align: center;
-        }
-        .login-card h1 {
-            margin-bottom: 0.5rem;
-            background: linear-gradient(to right, #6366f1, #22d3ee);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-    </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body>
-    <div class="login-card glass-card">
-        <h1>Вход в систему</h1>
-        <p style="color: var(--text-muted); margin-bottom: 2rem;">Доступ к мониторингу цен конкурентов</p>
+<body class="auth-page">
+    <div class="auth-card glass-card">
+        <div style="margin-bottom: 2rem;">
+            <div style="width: 64px; height: 64px; background: var(--primary-gradient); border-radius: 1.25rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; color: white; font-size: 2rem; box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);">
+                <i class="fa-solid fa-star"></i>
+            </div>
+            <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem; letter-spacing: -0.025em;">Say-Say Admin</h1>
+            <p style="color: var(--text-muted); font-weight: 500;">Вход в систему управления</p>
+        </div>
         
         <form id="loginForm">
-            <div class="form-group" style="text-align: left;">
-                <label>Пароль администратора</label>
-                <input type="password" id="password" name="password" placeholder="••••••••" required style="width: 100%; padding: 0.8rem; box-sizing: border-box;">
+            <div class="form-group" style="text-align: left; position: relative;">
+                <label style="color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; margin-left: 0.5rem;">Ваше имя</label>
+                <div style="position: relative;">
+                    <i class="fa-solid fa-user" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.9rem;"></i>
+                    <input type="text" value="Хоботов Виктор" disabled style="padding-left: 2.75rem; background-color: #f8fafc; border-color: var(--border-soft); color: var(--text-muted); font-weight: 500;">
+                </div>
             </div>
-            <button type="submit" style="width: 100%; margin-top: 1rem; padding: 1rem; background: linear-gradient(to right, var(--primary), var(--accent)); font-weight: 800;">
-                Войти в панель
+
+            <div class="form-group" style="text-align: left; position: relative;">
+                <label style="color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; margin-left: 0.5rem;">Пароль доступа</label>
+                <div style="position: relative;">
+                    <i class="fa-solid fa-lock" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.9rem;"></i>
+                    <input type="password" id="password" name="password" placeholder="Пароль" required style="padding-left: 2.75rem;">
+                </div>
+            </div>
+
+            <button type="submit" style="width: 100%; justify-content: center; padding: 1rem; font-size: 1rem; margin-top: 0.5rem;">
+                Авторизоваться
             </button>
         </form>
-        <div id="loginMsg" style="margin-top: 1rem; font-size: 0.9rem; color: #ef4444;"></div>
+
+        <div id="loginMsg" style="margin-top: 1.25rem; font-size: 0.875rem; color: var(--danger); font-weight: 600;"></div>
+        
+        <div style="margin-top: 3rem; font-size: 0.75rem; color: #94a3b8; line-height: 1.6;">
+            © 2026 Feedback Service. Доступ только для сотрудников компании.
+        </div>
     </div>
 
     <script>
@@ -65,11 +65,11 @@
                 if (response.ok) {
                     window.location.href = '/';
                 } else {
-                    msgEl.innerText = data.message || 'Ошибка входа: неверный пароль';
+                    msgEl.innerText = data.message || 'Неверный пароль доступа';
                 }
             } catch (err) {
                 console.error(err);
-                msgEl.innerText = 'Не удалось связаться с сервером';
+                msgEl.innerText = 'Сбой подключения к серверу';
             }
         });
     </script>

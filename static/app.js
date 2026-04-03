@@ -1,4 +1,5 @@
-// Furniture Monitor Admin JS - SPA Edition
+// Furniture Monitor Admin JS - PREMIUM Feedback Style
+// Synchronized with new style.css and admin.html structure
 
 document.addEventListener('DOMContentLoaded', () => {
     // 0. Initial Load 
@@ -45,7 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             const formData = new FormData(mappingForm);
             
-            statusDiv.innerHTML = '<span style="color: var(--accent);">Определяем магазин...</span>';
+            statusDiv.innerHTML = '<span style="color: var(--primary); font-weight: 600;"><i class="fa-solid fa-spinner fa-spin"></i> Определяем магазин...</span>';
             
             try {
                 const response = await fetch('/api/mappings', {
@@ -55,17 +56,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 if (response.ok) {
                     const data = await response.json();
-                    statusDiv.innerHTML = `<span style="color: var(--success);">✓ Успешно! Магазин: <strong>${data.store_name}</strong></span>`;
+                    statusDiv.innerHTML = `<span style="color: var(--success); font-weight: 600;"><i class="fa-solid fa-check-circle"></i> ✓ Успешно! Магазин: <strong>${data.store_name}</strong></span>`;
                     mappingForm.reset();
                     loadDashboardStats(); 
                 } else {
                     const err = await response.json();
                     const msg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err);
-                    statusDiv.innerHTML = `<span style="color: #ef4444;">⚠ Ошибка: ${msg}</span>`;
+                    statusDiv.innerHTML = `<span style="color: var(--danger); font-weight: 600;"><i class="fa-solid fa-triangle-exclamation"></i> ⚠ Ошибка: ${msg}</span>`;
                 }
             } catch (err) {
                 console.error(err);
-                statusDiv.innerHTML = '<span style="color: #ef4444;">⚠ Ошибка при подключении к серверу</span>';
+                statusDiv.innerHTML = '<span style="color: var(--danger);">⚠ Ошибка при подключении к серверу</span>';
             }
         });
     }
@@ -102,15 +103,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 4. Search Logics
     initSearch('catalogSearch', '.product-item');
-    initSearch('competitorSearch', '.competitor-row');
 
-    // Close analytics modal on click outside
-    window.onclick = (e) => {
-        const modal = document.getElementById('analyticsModal');
-        if (modal && e.target === modal) {
-            closeAnalytics();
-        }
-    };
+    // 5. Modal Overlay Close
+    const overlay = document.getElementById('modalOverlay');
+    if (overlay) {
+        overlay.onclick = () => closeAnalytics();
+    }
 });
 
 // --- SPA Logic ---
@@ -146,7 +144,7 @@ function initSearch(inputId, itemSelector) {
         const query = e.target.value.toLowerCase();
         document.querySelectorAll(itemSelector).forEach(item => {
             const text = item.innerText.toLowerCase();
-            item.style.display = text.includes(query) ? (itemSelector.includes('row') ? 'table-row' : 'flex') : 'none';
+            item.style.display = text.includes(query) ? 'flex' : 'none';
         });
     });
 }
@@ -158,7 +156,7 @@ async function loadStores() {
         const response = await fetch('/api/stores');
         if (!response.ok) return;
         const stores = await response.json();
-        const select = document.getElementById('storeFilter');
+        const select = document.getElementById('competitorStoreFilter');
         if (!select) return;
 
         select.innerHTML = '<option value="all">Все магазины</option>';
@@ -168,63 +166,75 @@ async function loadStores() {
             opt.textContent = s.name;
             select.appendChild(opt);
         });
+
+        select.onchange = () => filterCompetitors();
     } catch (err) {
         console.error('Stores Load Error:', err);
     }
 }
 
-window.filterCompetitors = () => {
-    const storeId = document.getElementById('storeFilter').value;
-    const rows = document.querySelectorAll('.competitor-row');
+function filterCompetitors() {
+    const storeId = document.getElementById('competitorStoreFilter').value;
+    const items = document.querySelectorAll('.competitor-product-item'); // Assuming we use a similar class to product-item
     
-    rows.forEach(row => {
-        if (storeId === 'all' || row.dataset.store === storeId) {
-            row.style.display = 'table-row';
+    items.forEach(item => {
+        if (storeId === 'all' || item.dataset.store === storeId) {
+            item.style.display = 'flex';
         } else {
-            row.style.display = 'none';
+            item.style.display = 'none';
         }
     });
 }
 
 async function loadCompetitorProducts() {
-    const tableBody = document.getElementById('competitorsTableBody');
-    if (!tableBody) return;
+    const listContainer = document.getElementById('competitorLinksList');
+    if (!listContainer) return;
 
-    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; opacity: 0.5;">Загрузка...</td></tr>';
+    listContainer.innerHTML = '<div style="text-align: center; padding: 3rem; opacity: 0.5;"><i class="fa-solid fa-circle-notch fa-spin"></i> Загрузка...</div>';
     
     try {
         const response = await fetch('/api/competitor_products/all');
         if (!response.ok) throw new Error('Failed to fetch');
         const data = await response.json();
 
-        tableBody.innerHTML = '';
+        listContainer.innerHTML = '';
+        if (data.length === 0) {
+            listContainer.innerHTML = '<p style="text-align: center; padding: 3rem; color: var(--text-muted);">Ссылки пока не добавлены</p>';
+            return;
+        }
+
         data.forEach(item => {
-            const row = document.createElement('tr');
-            row.className = 'competitor-row';
-            row.dataset.store = item.store_id;
+            const div = document.createElement('div');
+            div.className = 'product-item competitor-product-item';
+            div.dataset.store = item.store_id;
 
             const diff = item.competitor_price ? (item.our_price - item.competitor_price) : 0;
-            const diffColor = diff > 0 ? '#f87171' : (diff < 0 ? '#34d399' : 'inherit');
+            const diffClass = diff > 0 ? 'status-danger' : (diff < 0 ? 'status-success' : '');
             
-            row.innerHTML = `
-                <td>
-                    <div style="font-weight: 600;">${item.our_product_name}</div>
-                    <div style="font-size: 0.75rem; opacity: 0.5;">${item.store_name}</div>
-                </td>
-                <td style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    <a href="${item.url}" target="_blank" style="color: var(--accent); font-size: 0.85rem;">${item.url}</a>
-                </td>
-                <td style="text-align: right; font-weight: 700;">${item.our_price.toLocaleString()} ₽</td>
-                <td style="text-align: right; font-weight: 700;">${item.competitor_price ? item.competitor_price.toLocaleString() + ' ₽' : '—'}</td>
-                <td style="text-align: right; font-weight: 800; color: ${diffColor};">
-                    ${diff > 0 ? '+' : ''}${diff.toLocaleString()} ₽
-                </td>
+            div.innerHTML = `
+                <div style="flex-grow: 1;">
+                    <div style="font-weight: 700; color: var(--text-main);">${item.our_product_name}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">
+                         ${item.store_name} • <a href="${item.url}" target="_blank" style="color: var(--primary); text-decoration: none;">Открыть ссылку <i class="fa-solid fa-external-link" style="font-size: 0.6rem;"></i></a>
+                    </div>
+                </div>
+                <div style="text-align: right; margin-right: 1.5rem;">
+                    <div class="price" style="color: var(--text-muted); font-size: 0.9rem; font-weight: 500;">Наш: ${item.our_price.toLocaleString()} ₽</div>
+                    <div class="price">${item.competitor_price ? item.competitor_price.toLocaleString() + ' ₽' : 'Сбор...'}</div>
+                </div>
+                <div style="width: 120px; text-align: right;">
+                    ${item.competitor_price ? `
+                        <div class="status-pill ${diffClass}" style="width: 100%; justify-content: center;">
+                            ${diff > 0 ? '+' : ''}${diff.toLocaleString()} ₽
+                        </div>
+                    ` : '<span class="status-pill" style="opacity: 0.5;">Ожидание</span>'}
+                </div>
             `;
-            tableBody.appendChild(row);
+            listContainer.appendChild(div);
         });
     } catch (err) {
         console.error('Competitor Load Error:', err);
-        tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem; color: #f87171;">Ошибка загрузки данных</td></tr>';
+        listContainer.innerHTML = '<p style="text-align: center; padding: 3rem; color: var(--danger);">Ошибка при загрузке данных мониторинга</p>';
     }
 }
 
@@ -255,21 +265,37 @@ async function loadGlobalTrend() {
                 datasets: [{
                     label: 'Ср. цена рынка (₽)',
                     data: values,
-                    borderColor: '#22d3ee',
-                    backgroundColor: 'rgba(34, 211, 238, 0.05)',
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.05)',
                     fill: true,
                     tension: 0.4,
                     pointRadius: 4,
-                    pointBackgroundColor: '#22d3ee'
+                    pointBackgroundColor: '#ffffff',
+                    pointBorderColor: '#6366f1',
+                    pointBorderWidth: 2
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
+                plugins: { 
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: '#1e293b',
+                        padding: 12,
+                        cornerRadius: 8,
+                        titleFont: { size: 14, weight: 'bold' }
+                    }
+                },
                 scales: {
-                    y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                    x: { ticks: { color: '#94a3b8' }, grid: { display: false } }
+                    y: { 
+                        ticks: { color: '#64748b', font: { weight: '600' } }, 
+                        grid: { color: '#f1f5f9' } 
+                    },
+                    x: { 
+                        ticks: { color: '#64748b', font: { weight: '600' } }, 
+                        grid: { display: false } 
+                    }
                 }
             }
         });
@@ -357,40 +383,16 @@ async function handleDelete(btn) {
     }
 }
 
-async function runScraper(productId, btn) {
-    if (btn) {
-        btn.innerText = '⏳';
-        btn.disabled = true;
-    }
-
-    try {
-        const response = await fetch(`/api/scrape/${productId}`, { method: 'POST' });
-        const data = await response.json();
-        
-        if (response.ok) {
-            alert('Сбор цен запущен в фоновом режиме. Результаты появятся в аналитике через 1-2 минуты.');
-        } else {
-            alert('Ошибка: ' + (data.detail || 'Не удалось запустить сбор'));
-        }
-    } catch (err) {
-        console.error(err);
-        alert('Ошибка связи с сервером');
-    } finally {
-        if (btn) {
-            btn.innerText = '🔄';
-            btn.disabled = false;
-        }
-    }
-}
-
 async function viewAnalytics(productId) {
     const section = document.getElementById('analyticsSection');
+    const overlay = document.getElementById('modalOverlay');
     const badge = document.getElementById('recommendationBadge');
     
-    if (!section) return; // In new layout, it might be inside the 'our-products' section
+    if (!section) return; 
     
     section.style.display = 'block';
-    section.scrollIntoView({ behavior: 'smooth' });
+    if (overlay) overlay.style.display = 'block';
+    section.scrollTop = 0;
     
     showLoading("Загрузка аналитики...");
     try {
@@ -401,51 +403,23 @@ async function viewAnalytics(productId) {
         }
         const data = await response.json();
         
-        document.getElementById('analyticsTitle').innerText = `Аналитика: ${data.our_product.name}`;
+        document.getElementById('analyticsTitle').innerText = data.our_product.name;
         document.getElementById('ourPriceBadge').innerText = `${(data.our_product.current_price || 0).toLocaleString()} ₽`;
-        document.getElementById('avgCompBadge').innerText = `${(data.avg_price || 0).toLocaleString()} ₽`;
         document.getElementById('minCompBadge').innerText = `${(data.min_competitor || 0).toLocaleString()} ₽`;
         
         if (data.recommendation) {
             badge.innerText = data.recommendation.text;
             const isWarning = data.recommendation.type === 'decrease';
-            badge.style.background = isWarning ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)';
-            badge.style.color = isWarning ? '#f87171' : '#34d399';
+            badge.className = isWarning ? 'status-pill status-danger' : 'status-pill status-success';
         }
 
         renderChart(data);
-        renderHistoryTable(data.history);
-        
     } catch (err) {
         console.error('Analytics Error:', err);
         alert('Ошибка: ' + err.message);
     } finally {
         hideLoading();
     }
-}
-
-function renderHistoryTable(history) {
-    const tableBody = document.getElementById('historyTableBody');
-    if (!tableBody) return;
-    tableBody.innerHTML = '';
-    
-    history.forEach(entry => {
-        const date = new Date(entry.date).toLocaleString([], {
-            day: '2-digit', month: '2-digit', year: '2-digit',
-            hour: '2-digit', minute: '2-digit'
-        });
-        
-        const row = document.createElement('tr');
-        row.style.borderBottom = '1px solid var(--glass)';
-        row.innerHTML = `
-            <td style="padding: 0.8rem; opacity: 0.8;">${date}</td>
-            <td style="padding: 0.8rem; font-weight: 600;">${entry.store}</td>
-            <td style="padding: 0.8rem; text-align: right; color: var(--accent); font-weight: 800;">
-                ${entry.price.toLocaleString()} ₽
-            </td>
-        `;
-        tableBody.appendChild(row);
-    });
 }
 
 function renderChart(data) {
@@ -455,10 +429,10 @@ function renderChart(data) {
     if (priceChart) priceChart.destroy();
     
     if (!data.history || data.history.length === 0) {
-        ctx.font = '14px sans-serif';
-        ctx.fillStyle = '#94a3b8';
+        ctx.font = '600 14px Inter';
+        ctx.fillStyle = '#64748b';
         ctx.textAlign = 'center';
-        ctx.fillText('История цен пока не собрана...', 200, 75);
+        ctx.fillText('Сбор истории цен...', canvas.width/2, canvas.height/2);
         return;
     }
 
@@ -474,29 +448,37 @@ function renderChart(data) {
                 {
                     label: 'Цена конкурентов',
                     data: prices,
-                    borderColor: '#22d3ee',
-                    backgroundColor: 'rgba(34, 211, 238, 0.1)',
+                    borderColor: '#a855f7',
+                    backgroundColor: 'rgba(168, 85, 247, 0.05)',
                     fill: true,
-                    tension: 0.4
+                    tension: 0.4,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#ffffff',
+                    pointBorderColor: '#a855f7'
                 },
                 {
                     label: 'Наша цена',
                     data: labels.map(() => data.our_product.current_price),
                     borderColor: '#6366f1',
-                    borderDash: [5, 5],
+                    borderDash: [8, 4],
                     pointRadius: 0,
-                    fill: false
+                    fill: false,
+                    borderWidth: 2
                 }
             ]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
-                legend: { labels: { color: 'white' } }
+                legend: { 
+                    position: 'bottom',
+                    labels: { color: '#64748b', font: { weight: '600' } } 
+                }
             },
             scales: {
-                y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                y: { ticks: { color: '#64748b' }, grid: { color: '#f1f5f9' } },
+                x: { ticks: { color: '#64748b' }, grid: { display: false } }
             }
         }
     });
@@ -504,10 +486,10 @@ function renderChart(data) {
 
 // --- Utilities ---
 
-function showLoading(text = "Обработка...") {
+function showLoading(text = "Обработка данных...") {
     const loader = document.getElementById('loader');
     if (loader) {
-        loader.querySelector('.loading-text').textContent = text;
+        loader.querySelector('div[style*="font-weight: 700"]').textContent = text;
         loader.style.display = 'flex';
     }
 }
@@ -530,10 +512,7 @@ async function loadDashboardStats() {
         };
 
         if (els.statTotal) els.statTotal.innerText = data.total_products;
-        if (els.statAtRisk) {
-            els.statAtRisk.innerText = data.at_risk;
-            els.statAtRisk.style.color = data.at_risk > 0 ? '#f87171' : '#34d399';
-        }
+        if (els.statAtRisk) els.statAtRisk.innerText = data.at_risk;
         if (els.statAvgGap) els.statAvgGap.innerText = `${data.avg_gap.toLocaleString()} ₽`;
         if (els.statLastSync) els.statLastSync.innerText = data.last_sync;
         
@@ -561,12 +540,12 @@ async function loadSettings() {
     }
 }
 
-// Bridge functions for clean HTML (since they are referenced in onclick/oninput)
-window.handleScrape = (btn) => runScraper(btn.getAttribute('data-id'), btn);
+// Bridge functions
 window.handleAnalytics = (btn) => viewAnalytics(btn.getAttribute('data-id'));
-window.handleProductDelete = (btn) => handleDelete(btn);
+window.handleDelete = (btn) => handleDelete(btn);
 window.closeAnalytics = () => {
     const s = document.getElementById('analyticsSection');
+    const o = document.getElementById('modalOverlay');
     if (s) s.style.display = 'none';
+    if (o) o.style.display = 'none';
 }
-window.downloadReport = () => window.location.href = '/api/export';

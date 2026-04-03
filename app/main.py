@@ -13,6 +13,10 @@ from datetime import datetime
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from fastapi.security import APIKeyCookie
+from dotenv import load_dotenv
+from pathlib import Path
+from .core.database import supabase
+
 # Optional imports for Vercel 'Slim' compatibility
 try:
     from xhtml2pdf import pisa

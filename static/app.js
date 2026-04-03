@@ -117,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 window.switchSection = (sectionId) => {
     // Hide all sections
-    document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
     // Show target
     const target = document.getElementById(`section-${sectionId}`);
     if (target) target.classList.add('active');

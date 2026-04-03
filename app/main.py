@@ -1,0 +1,576 @@
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, BackgroundTasks
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import os
+import io
+import csv
+import urllib.parse
+import jwt
+import time
+from datetime import datetime
+from starlette.requests import Request
+from starlette.responses import RedirectResponse
+from fastapi.security import APIKeyCookie
+from xhtml2pdf import pisa
+from dotenv import load_dotenv
+from pathlib import Path
+from .core.database import supabase
+from .worker.scraper import scrape_for_product, monitor_all
+
+# Standard path resolution for Phase 9 environment variables
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path)
+
+app = FastAPI(title="Furniture Competitor Monitor")
+SECRET_KEY = os.getenv("SECRET_KEY", "FURNITURE_MONITOR_SECRET_PROD") 
+ALGORITHM = "HS256"
+COOKIE_NAME = "auth_token"
+auth_cookie = APIKeyCookie(name=COOKIE_NAME, auto_error=False)
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expires = time.time() + 3600 * 24 # 24 hours
+    to_encode.update({"exp": expires})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+async def get_current_user(token: str = Depends(auth_cookie)):
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload.get("sub")
+    except Exception:
+        return None
+
+# Get absolute path to this file's directory
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "..", "static")), name="static")
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "..", "templates"))
+scheduler = AsyncIOScheduler()
+
+@app.get("/api/report/pdf")
+async def get_pdf_report(user_id: str = Depends(get_current_user)):
+    """Generates a professional PDF report for stakeholders"""
+    if not user_id:
+        return RedirectResponse(url="/login")
+        
+    try:
+        # Fetch current state
+        products_raw = supabase.table("our_product").select("*, category:product_category(name)").order("name").execute().data
+        all_mappings = supabase.table("competitor_product").select("*, price_record(*)").execute().data
+        
+        products = []
+        for p in products_raw:
+            our_price = float(p['current_price']) if p.get('current_price') else 0
+            p_mappings = [m for m in all_mappings if m['our_product_id'] == p['id']]
+            
+            latest_prices = []
+            for m in p_mappings:
+                records = m.get('price_record', [])
+                if records:
+                    latest = sorted(records, key=lambda x: x['created_at'])[-1]
+                    latest_prices.append(float(latest['price']))
+            
+            min_comp = min(latest_prices) if latest_prices else 0
+            diff = our_price - min_comp if min_comp > 0 else 0
+            
+            # Identify Price Status
+            status = "NEUTRAL"
+            if min_comp:
+                if our_price < min_comp: status = "success"
+                elif abs(our_price - min_comp) < 2: status = "warning"
+                else: status = "danger"
+
+            p['min_comp'] = min_comp
+            p['diff'] = diff
+            p['price_status'] = status
+            products.append(p)
+
+        html_content = templates.get_template("report_pdf.html").render({
+            "now": datetime.now().strftime("%d.%m.%Y %H:%M"),
+            "products": products
+        })
+
+        pdf_output = io.BytesIO()
+        pisa_status = pisa.CreatePDF(io.StringIO(html_content), dest=pdf_output)
+        
+        if pisa_status.err:
+            raise HTTPException(status_code=500, detail="Error generating PDF")
+            
+        pdf_output.seek(0)
+        return StreamingResponse(
+            iter([pdf_output.getvalue()]), 
+            media_type="application/pdf",
+            headers={"Content-Disposition": "inline; filename=report.pdf"}
+        )
+    except Exception as e:
+        print(f"PDF ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/login", response_class=HTMLResponse)
+async def get_login_page(request: Request):
+    """Simple login view"""
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.post("/api/login")
+async def post_login(password: str = Form(...)):
+    """Validates password and sets JWT cookie"""
+    try:
+        resp = supabase.table("system_settings").select("*").eq("key", "admin_password").execute()
+        if not resp.data:
+            raise HTTPException(status_code=500, detail="Пароль не настроен в БД")
+        
+        correct_password = resp.data[0]['value']
+        if password != correct_password:
+            return JSONResponse(status_code=401, content={"status": "error", "message": "Неверный пароль"})
+        
+        token = create_access_token({"sub": "admin"})
+        response = JSONResponse(content={"status": "success", "message": "Вход выполнен"})
+        response.set_cookie(key=COOKIE_NAME, value=token, httponly=True, max_age=3600*24)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/logout")
+async def logout():
+    """Clears the auth cookie"""
+    response = RedirectResponse(url="/login")
+    response.delete_cookie(COOKIE_NAME)
+    return response
+
+@app.on_event("startup")
+async def startup_event():
+    """Initializes background tasks on server start"""
+    print("DEBUG: [Startup] Starting initialization...")
+    try:
+        # Schedule full price monitoring every 12 hours
+        print(f"DEBUG: [Startup] Adding scheduler job (monitor_all)...")
+        scheduler.add_job(monitor_all, 'interval', hours=12)
+        print("DEBUG: [Startup] Starting APScheduler...")
+        scheduler.start()
+        print("DEBUG: [Startup] APScheduler started successfully.")
+    except Exception as e:
+        print(f"CRITICAL STARTUP ERROR: {e}")
+    print("DEBUG: [Startup] Initialization complete.")
+
+# Resolving paths relative to the project root
+ROOT_DIR = Path(__file__).parent.parent.resolve()
+STATIC_DIR = ROOT_DIR / "static"
+TEMPLATES_DIR = ROOT_DIR / "templates"
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+# Utility to detect store from URL
+def detect_store(url: str):
+    try:
+        domain = urllib.parse.urlparse(url).netloc
+        if not domain:
+            return None
+        domain = domain.replace("www.", "")
+        
+        # Search for domain match in competitor_store via HTTP
+        response = supabase.table("competitor_store").select("*").execute()
+        for store in response.data:
+            if store['domain'] in domain:
+                return store
+        return None
+    except Exception:
+        return None
+
+@app.get("/", response_class=HTMLResponse)
+async def get_admin_panel(request: Request, user_id: str = Depends(get_current_user)):
+    """Main admin dashboard view with login check"""
+    if not user_id:
+        return RedirectResponse(url="/login")
+    
+    try:
+        categories = supabase.table("product_category").select("*").order("name").execute().data
+        products_raw = supabase.table("our_product").select("*, category:product_category(name)").order("name").execute().data
+        
+        # Get ALL mappings to calculate statuses in one go
+        all_mappings = supabase.table("competitor_product").select("*, price_record(*)").execute().data
+        
+        products = []
+        for p in products_raw:
+            p_mappings = [m for m in all_mappings if m['our_product_id'] == p['id']]
+            
+            latest_prices = []
+            for m in p_mappings:
+                records = m.get('price_record', [])
+                if records:
+                    latest = sorted(records, key=lambda x: x['created_at'])[-1]
+                    latest_prices.append(float(latest['price']))
+            
+            min_comp = min(latest_prices) if latest_prices else None
+            our_price = float(p['current_price']) if p.get('current_price') else 0
+            
+            # Identify Price Status
+            status = "neutral"
+            if min_comp:
+                if our_price < min_comp: status = "success"
+                elif abs(our_price - min_comp) < 2: status = "warning" # approx equal
+                else: status = "danger"
+                
+            p['price_status'] = status
+            products.append(p)
+
+        return templates.TemplateResponse("admin.html", {
+            "request": request, 
+            "categories": categories,
+            "products": products
+        })
+    except Exception as e:
+        print(f"Error loading admin panel: {e}")
+        return HTMLResponse(content=f"Error connecting to database: {e}", status_code=500)
+
+@app.post("/api/products")
+async def add_product(
+    name: str = Form(...), 
+    category_id: int = Form(...), 
+    url: str = Form(None), 
+    price: float = Form(None),
+    article_1c: str = Form(None),
+    user_id: str = Depends(get_current_user)
+):
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+    data = {
+        "name": name,
+        "category_id": category_id,
+        "url": url,
+        "current_price": price,
+        "article_1c": article_1c
+    }
+    try:
+        result = supabase.table("our_product").insert(data).execute()
+        return result.data[0] if result.data else {"status": "ok"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/1c/prices")
+async def get_prices_for_1c(user_id: str = Depends(get_current_user)):
+    """Special endpoint for 1C:Enterprise synchronization"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        
+    try:
+        products = supabase.table("our_product").select("article_1c, current_price, name").execute().data
+        # Return object keyed by Article for easy 1C mapping
+        return {p['article_1c']: {"price": p['current_price'], "name": p['name']} for p in products if p['article_1c']}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/analytics/{product_id}")
+async def get_product_analytics(product_id: int):
+    try:
+        # 1. Fetch our product
+        prod_resp = supabase.table("our_product").select("*").eq("id", product_id).execute()
+        if not prod_resp.data:
+            raise HTTPException(status_code=404, detail="Product not found")
+        product = prod_resp.data[0]
+        
+        # 2. Fetch competitor mappings with store names and their price records
+        mappings_resp = supabase.table("competitor_product").select("*, competitor_store(name), price_record(*)").eq("our_product_id", product_id).execute()
+        
+        history = []
+        latest_prices = []
+        
+        for mapping in mappings_resp.data:
+            store_data = mapping.get('competitor_store') or {}
+            store_name = store_data.get('name', 'Конкурент')
+            records = mapping.get('price_record', [])
+            
+            for r in records:
+                history.append({
+                    "date": r['created_at'],
+                    "price": float(r['price']),
+                    "store": store_name
+                })
+            
+            if records:
+                latest_r = sorted(records, key=lambda x: x['created_at'])[-1]
+                latest_prices.append(float(latest_r['price']))
+        
+        our_price = float(product['current_price']) if product.get('current_price') else 0
+        avg_price = sum(latest_prices) / len(latest_prices) if latest_prices else 0
+        min_price = min(latest_prices) if latest_prices else 0
+        
+        # Recommendation
+        recommendation = None
+        if latest_prices:
+            diff = our_price - min_price
+            if diff > 0:
+                recommendation = {
+                    "type": "decrease",
+                    "text": "Рекомендуется снизить цену",
+                    "details": f"Ваша цена выше конкурента на {diff} ₽. Оптимально: {min_price - 100} ₽"
+                }
+            else:
+                recommendation = {
+                    "type": "increase",
+                    "text": "Цена конкурентоспособна",
+                    "details": f"Ваша цена ниже или в рынке."
+                }
+        
+        return {
+            "our_product": product,
+            "avg_price": round(avg_price, 2),
+            "min_competitor": round(min_price, 2),
+            "history": sorted(history, key=lambda x: x['date'], reverse=True),
+            "recommendation": recommendation
+        }
+    except Exception as e:
+        print(f"ANALYTICS ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/settings")
+async def get_settings():
+    """Fetches all system configuration"""
+    try:
+        resp = supabase.table("system_settings").select("*").execute()
+        return {s['key']: s['value'] for s in resp.data}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/settings")
+async def save_settings(request: Request):
+    """Saves updated system configuration"""
+    try:
+        data = await request.json()
+        for key, value in data.items():
+            supabase.table("system_settings").update({"value": str(value)}).eq("key", key).execute()
+        return {"status": "success", "message": "Настройки сохранены"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/mappings")
+async def add_mapping(background_tasks: BackgroundTasks, product_id: int = Form(...), competitor_url: str = Form(...)):
+    store = detect_store(competitor_url)
+    if not store:
+        raise HTTPException(status_code=400, detail="Магазин не распознан")
+    
+    data = {
+        "our_product_id": product_id,
+        "store_id": store['id'],
+        "url": competitor_url
+    }
+    try:
+        supabase.table("competitor_product").insert(data).execute()
+        # Trigger immediate scrape for this product
+        background_tasks.add_task(scrape_for_product, product_id)
+        return {"status": "success", "store_name": store['name']}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/scrape/{product_id}")
+async def trigger_scrape(product_id: int, background_tasks: BackgroundTasks):
+    """Manual trigger for scraping"""
+    background_tasks.add_task(scrape_for_product, product_id)
+    return {"status": "accepted", "message": "Сбор цен запущен в фоновом режиме"}
+
+@app.get("/api/dashboard/stats")
+async def get_dashboard_stats():
+    """Aggregates global statistics for the overview panel"""
+    try:
+        products = supabase.table("our_product").select("*").execute().data
+        all_mappings = supabase.table("competitor_product").select("*, price_record(*)").execute().data
+        
+        at_risk = 0
+        total_gap = 0
+        last_sync = None
+        
+        for p in products:
+            our_price = float(p['current_price']) if p.get('current_price') else 0
+            p_mappings = [m for m in all_mappings if m['our_product_id'] == p['id']]
+            
+            latest_prices = []
+            for m in p_mappings:
+                records = m.get('price_record', [])
+                if records:
+                    latest = sorted(records, key=lambda x: x['created_at'])[-1]
+                    latest_prices.append(float(latest['price']))
+                    # Track global last sync
+                    ts = datetime.fromisoformat(latest['created_at'].replace('Z', '+00:00'))
+                    if not last_sync or ts > last_sync:
+                        last_sync = ts
+            
+            if latest_prices:
+                min_comp = min(latest_prices)
+                if our_price > min_comp:
+                    at_risk += 1
+                    total_gap += (our_price - min_comp)
+        
+        return {
+            "total_products": len(products),
+            "at_risk": at_risk,
+            "avg_gap": round(total_gap / at_risk, 2) if at_risk > 0 else 0,
+            "last_sync": last_sync.strftime("%d.%m %H:%M") if last_sync else "—"
+        }
+    except Exception as e:
+        print(f"STATS ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/dashboard/history")
+async def get_global_history(user_id: str = Depends(get_current_user)):
+    """Computes daily average prices across ALL products for market trend analysis"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    
+    try:
+        # Fetch all price records
+        records = supabase.table("price_record").select("price, created_at").execute().data
+        
+        # Group by day and average
+        daily_sums = {}
+        daily_counts = {}
+        for r in records:
+            day = r['created_at'][:10] # YYYY-MM-DD
+            price = float(r['price'])
+            daily_sums[day] = daily_sums.get(day, 0) + price
+            daily_counts[day] = daily_counts.get(day, 0) + 1
+            
+        history = []
+        for day in sorted(daily_sums.keys()):
+            history.append({
+                "date": day,
+                "avg_price": round(daily_sums[day] / daily_counts[day], 2)
+            })
+            
+        return history[-30:] # Return last 30 days
+        
+    except Exception as e:
+        print(f"DASHBOARD ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/export")
+async def export_data():
+    """Generates a CSV report of all products and their market status"""
+    try:
+        # Re-use the logic from dashboard stats for consistency
+        products = supabase.table("our_product").select("*").execute().data
+        all_mappings = supabase.table("competitor_product").select("*, price_record(*)").execute().data
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        # Header row
+        writer.writerow(["ID", "Артикул 1C", "Название", "Наша цена (₽)", "Мин. цена конкурентов (₽)", "Разница (₽)", "Дата обновления"])
+        
+        for p in products:
+            our_price = float(p['current_price']) if p.get('current_price') else 0
+            p_mappings = [m for m in all_mappings if m['our_product_id'] == p['id']]
+            
+            latest_prices = []
+            last_date = "—"
+            for m in p_mappings:
+                records = m.get('price_record', [])
+                if records:
+                    latest = sorted(records, key=lambda x: x['created_at'])[-1]
+                    latest_prices.append(float(latest['price']))
+                    last_date = latest['created_at'][:16].replace('T', ' ')
+            
+            min_comp = min(latest_prices) if latest_prices else 0
+            diff = our_price - min_comp if min_comp > 0 else 0
+            
+            writer.writerow([
+                p['id'], p.get('article_1c', '—'), p['name'], our_price, min_comp or "—", diff, last_date
+            ])
+            
+        output.seek(0)
+        headers = {'Content-Disposition': 'attachment; filename="furniture_prices_report.csv"'}
+        return StreamingResponse(iter([output.getvalue()]), media_type="text/csv", headers=headers)
+        
+    except Exception as e:
+        print(f"EXPORT ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/products/batch-delete")
+async def batch_delete_products(data: dict, user_id: str = Depends(get_current_user)):
+    """Deletes multiple products and their history in one batch"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        
+    ids = data.get("ids", [])
+    if not ids:
+        return {"status": "error", "message": "Список ID пуст"}
+        
+    try:
+        # 1. Gather mapping IDs for these products
+        mappings = supabase.table("competitor_product").select("id").in_("our_product_id", ids).execute().data
+        mapping_ids = [m['id'] for m in mappings]
+        
+        # 2. Delete price records for those mappings
+        if mapping_ids:
+            supabase.table("price_record").delete().in_("competitor_product_id", mapping_ids).execute()
+        
+        # 3. Delete mappings
+        supabase.table("competitor_product").delete().in_("our_product_id", ids).execute()
+        
+        # 4. Finally delete the products
+        supabase.table("our_product").delete().in_("id", ids).execute()
+        
+        return {"status": "success", "message": f"Удалено товаров: {len(ids)}"}
+    except Exception as e:
+        print(f"BATCH DELETE ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/products/{product_id}")
+async def update_product(
+    product_id: int, 
+    data: dict,
+    user_id: str = Depends(get_current_user)
+):
+    """Universal product update (price, 1c article, etc)"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        
+    try:
+        supabase.table("our_product").update(data).eq("id", product_id).execute()
+        return {"status": "success", "message": "Товар обновлен"}
+    except Exception as e:
+        print(f"UPDATE ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/competitor_products/all")
+async def get_all_competitor_products(user_id: str = Depends(get_current_user)):
+    """Returns all competitor links across all stores with their latest prices"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        # Fetch mappings with store and our product info
+        mappings = supabase.table("competitor_product").select("*, competitor_store(name), our_product(name, current_price), price_record(*)").execute().data
+        
+        result = []
+        for m in mappings:
+            records = m.get('price_record', [])
+            latest_price = None
+            if records:
+                latest = sorted(records, key=lambda x: x['created_at'])[-1]
+                latest_price = float(latest['price'])
+            
+            result.append({
+                "id": m['id'],
+                "url": m['url'],
+                "store_name": m['competitor_store']['name'] if m.get('competitor_store') else "—",
+                "our_product_name": m['our_product']['name'] if m.get('our_product') else "—",
+                "our_price": float(m['our_product']['current_price']) if m.get('our_product') and m['our_product'].get('current_price') else 0,
+                "competitor_price": latest_price,
+                "store_id": m['store_id']
+            })
+        return result
+    except Exception as e:
+        print(f"COMPETITORS ALL ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/stores")
+async def get_stores(user_id: str = Depends(get_current_user)):
+    """Returns list of all competitor stores for filtering"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        return supabase.table("competitor_store").select("*").order("name").execute().data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

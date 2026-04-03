@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        body {
+            font-family: 'Helvetica', Arial, sans-serif;
+            color: #333;
+            line-height: 1.4;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #6366f1;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: #6366f1;
+            margin: 0;
+            font-size: 24px;
+        }
+        .info {
+            margin-bottom: 20px;
+            font-size: 12px;
+            color: #666;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            font-size: 10px;
+        }
+        th {
+            background-color: #f8fafc;
+            color: #1e293b;
+        }
+        .price {
+            text-align: right;
+            font-weight: bold;
+        }
+        .status-danger {
+            color: #ef4444;
+        }
+        .status-success {
+            color: #10b981;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 10px;
+            text-align: center;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Furniture Price Monitor</h1>
+        <p>Аттестат мебельного рынка</p>
+    </div>
+
+    <div class="info">
+        Дата формирования: <strong>{{ now }}</strong>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Артикул 1С</th>
+                <th>Наименование товара</th>
+                <th>Наша цена</th>
+                <th>Конкурент (Мин.)</th>
+                <th>Разрыв</th>
+                <th>Статус</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in products %}
+            <tr>
+                <td>{{ p.article_1c or '—' }}</td>
+                <td>{{ p.name }}</td>
+                <td class="price">{{ "{:,.0f}".format(p.current_price or 0).replace(",", " ") }} ₽</td>
+                <td class="price">{{ "{:,.0f}".format(p.min_comp or 0).replace(",", " ") }} ₽</td>
+                <td class="price {{ 'status-danger' if p.diff > 0 else 'status-success' }}">
+                    {{ "{:,.0f}".format(p.diff or 0).replace(",", " ") }} ₽
+                </td>
+                <td class="{{ 'status-danger' if p.price_status == 'danger' else 'status-success' }}">
+                    {{ p.price_status.upper() }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="footer">
+        © 2026 Alleya Certification • Alleya Furniture Monitoring Platform
+    </div>
+</body>
+</html>

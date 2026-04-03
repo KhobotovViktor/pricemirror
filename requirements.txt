@@ -6,4 +6,5 @@ pydantic
 pydantic-settings
 supabase
 python-dotenv
-# Сюда можно добавить легкие библиотеки, если понадобятся
+apscheduler
+PyJWT

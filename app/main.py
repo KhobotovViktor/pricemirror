@@ -10,7 +10,6 @@ import urllib.parse
 import jwt
 import time
 from datetime import datetime
-from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from fastapi.security import APIKeyCookie
 import traceback
@@ -115,10 +114,14 @@ async def get_pdf_report(user_id: str = Depends(get_current_user)):
             p['price_status'] = status
             products.append(p)
 
-        html_content = templates.get_template("report_pdf.html").render({
-            "now": datetime.now().strftime("%d.%m.%Y %H:%M"),
-            "products": products
-        })
+        return templates.TemplateResponse(
+            name="report_pdf.html", 
+            context={
+                "request": request,
+                "now": datetime.now().strftime("%d.%m.%Y %H:%M"),
+                "products": products
+            }
+        )
 
         pdf_output = io.BytesIO()
         pisa_status = pisa.CreatePDF(io.StringIO(html_content), dest=pdf_output)
@@ -139,7 +142,7 @@ async def get_pdf_report(user_id: str = Depends(get_current_user)):
 @app.get("/login", response_class=HTMLResponse)
 async def get_login_page(request: Request):
     """Simple login view"""
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(name="login.html", context={"request": request})
 
 @app.post("/api/login")
 async def post_login(password: str = Form(...)):
@@ -247,11 +250,14 @@ async def get_admin_panel(request: Request, user_id: str = Depends(get_current_u
             p['price_status'] = status
             products.append(p)
 
-        return templates.TemplateResponse("admin.html", {
-            "request": request, 
-            "categories": categories,
-            "products": products
-        })
+        return templates.TemplateResponse(
+            name="admin.html", 
+            context={
+                "request": request, 
+                "categories": categories,
+                "products": products
+            }
+        )
     except Exception as e:
         print(f"Error loading admin panel: {e}")
         return HTMLResponse(content=f"Error connecting to database: {e}", status_code=500)

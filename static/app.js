@@ -101,9 +101,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // 4. Search Logics
-    initSearch('catalogSearch', '.product-item');
-
+    // 4. Search & Filter Logics
+    const catalogSearch = document.getElementById('catalogSearch');
+    const categoryFilter = document.getElementById('categoryFilter');
+    
+    if (catalogSearch) catalogSearch.addEventListener('input', handleProductFilter);
+    if (categoryFilter) categoryFilter.addEventListener('change', handleProductFilter);
+    
+    initSearch('competitorSearch', '.competitor-row');
+    
     // 5. Modal Overlay Close
     const overlay = document.getElementById('modalOverlay');
     if (overlay) {
@@ -146,6 +152,21 @@ function initSearch(inputId, itemSelector) {
             const text = item.innerText.toLowerCase();
             item.style.display = text.includes(query) ? 'flex' : 'none';
         });
+    });
+}
+
+function handleProductFilter() {
+    const query = document.getElementById('catalogSearch')?.value.toLowerCase() || '';
+    const categoryId = document.getElementById('categoryFilter')?.value || 'all';
+    
+    document.querySelectorAll('.product-item').forEach(item => {
+        const name = item.dataset.name || '';
+        const itemCategory = item.dataset.category || '';
+        
+        const matchesSearch = name.includes(query);
+        const matchesCategory = (categoryId === 'all' || itemCategory === categoryId);
+        
+        item.style.display = (matchesSearch && matchesCategory) ? 'flex' : 'none';
     });
 }
 

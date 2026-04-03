@@ -115,8 +115,9 @@ async def get_pdf_report(user_id: str = Depends(get_current_user)):
             products.append(p)
 
         return templates.TemplateResponse(
-            name="report_pdf.html", 
-            context={
+            request,
+            "report_pdf.html", 
+            {
                 "request": request,
                 "now": datetime.now().strftime("%d.%m.%Y %H:%M"),
                 "products": products
@@ -142,7 +143,7 @@ async def get_pdf_report(user_id: str = Depends(get_current_user)):
 @app.get("/login", response_class=HTMLResponse)
 async def get_login_page(request: Request):
     """Simple login view"""
-    return templates.TemplateResponse(name="login.html", context={"request": request})
+    return templates.TemplateResponse(request, "login.html", {"request": request})
 
 @app.post("/api/login")
 async def post_login(password: str = Form(...)):
@@ -251,8 +252,9 @@ async def get_admin_panel(request: Request, user_id: str = Depends(get_current_u
             products.append(p)
 
         return templates.TemplateResponse(
-            name="admin.html", 
-            context={
+            request,
+            "admin.html", 
+            {
                 "request": request, 
                 "categories": categories,
                 "products": products

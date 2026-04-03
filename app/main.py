@@ -13,11 +13,18 @@ from datetime import datetime
 from starlette.requests import Request
 from starlette.responses import RedirectResponse
 from fastapi.security import APIKeyCookie
-from xhtml2pdf import pisa
-from dotenv import load_dotenv
-from pathlib import Path
-from .core.database import supabase
-from .worker.scraper import scrape_for_product, monitor_all
+# Optional imports for Vercel 'Slim' compatibility
+try:
+    from xhtml2pdf import pisa
+    PISA_AVAILABLE = True
+except ImportError:
+    PISA_AVAILABLE = False
+
+try:
+    from .worker.scraper import scrape_for_product, monitor_all
+    SCRAPER_AVAILABLE = True
+except ImportError:
+    SCRAPER_AVAILABLE = False
 
 # Standard path resolution for Phase 9 environment variables
 env_path = Path(__file__).parent.parent / '.env'
@@ -55,6 +62,9 @@ async def get_pdf_report(user_id: str = Depends(get_current_user)):
     """Generates a professional PDF report for stakeholders"""
     if not user_id:
         return RedirectResponse(url="/login")
+        
+    if not PISA_AVAILABLE:
+        raise HTTPException(status_code=501, detail="PDF generation is not available in this environment.")
         
     try:
         # Fetch current state
@@ -144,15 +154,18 @@ async def logout():
 async def startup_event():
     """Initializes background tasks on server start"""
     print("DEBUG: [Startup] Starting initialization...")
-    try:
-        # Schedule full price monitoring every 12 hours
-        print(f"DEBUG: [Startup] Adding scheduler job (monitor_all)...")
-        scheduler.add_job(monitor_all, 'interval', hours=12)
-        print("DEBUG: [Startup] Starting APScheduler...")
-        scheduler.start()
-        print("DEBUG: [Startup] APScheduler started successfully.")
-    except Exception as e:
-        print(f"CRITICAL STARTUP ERROR: {e}")
+    # Scheduler should only run if scraper is actually available (not in Slim mode)
+    if SCRAPER_AVAILABLE:
+        try:
+            print(f"DEBUG: [Startup] Adding scheduler job (monitor_all)...")
+            scheduler.add_job(monitor_all, 'interval', hours=12)
+            print("DEBUG: [Startup] Starting APScheduler...")
+            scheduler.start()
+            print("DEBUG: [Startup] APScheduler started successfully.")
+        except Exception as e:
+            print(f"CRITICAL STARTUP ERROR: {e}")
+    else:
+        print("DEBUG: [Startup] Scraper not found, skipping scheduler.")
     print("DEBUG: [Startup] Initialization complete.")
 
 # Resolving paths relative to the project root
@@ -369,6 +382,9 @@ async def add_mapping(background_tasks: BackgroundTasks, product_id: int = Form(
 @app.post("/api/scrape/{product_id}")
 async def trigger_scrape(product_id: int, background_tasks: BackgroundTasks):
     """Manual trigger for scraping"""
+    if not SCRAPER_AVAILABLE:
+        return JSONResponse(status_code=501, content={"status": "error", "message": "Скрапинг недоступен в облачной среде. Запустите скрапер локально."})
+    
     background_tasks.add_task(scrape_for_product, product_id)
     return {"status": "accepted", "message": "Сбор цен запущен в фоновом режиме"}
 

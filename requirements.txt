@@ -1,18 +1,9 @@
 fastapi
 uvicorn
-psycopg2-binary
-sqlalchemy
-alembic
 python-multipart
 jinja2
-playwright
-easyocr
-opencv-python
-numpy
-chartjs
 pydantic
 pydantic-settings
-xhtml2pdf
-pyjwt
 supabase
 python-dotenv
+# Сюда можно добавить легкие библиотеки, если понадобятся

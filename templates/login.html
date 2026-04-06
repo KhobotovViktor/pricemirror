@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Вход | Monitor.PRO</title>
+    <title>Вход | Price Mirror</title>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
@@ -11,9 +11,9 @@
     <div class="auth-card glass-card">
         <div style="margin-bottom: 2rem;">
             <div style="width: 64px; height: 64px; background: var(--primary-gradient); border-radius: 1.25rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; color: white; font-size: 2rem; box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);">
-                <i class="fa-solid fa-star"></i>
+                <i class="fa-solid fa-magnifying-glass-chart"></i>
             </div>
-            <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem; letter-spacing: -0.025em;">Say-Say Admin</h1>
+            <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem; letter-spacing: -0.025em;">Price Mirror</h1>
             <p style="color: var(--text-muted); font-weight: 500;">Вход в систему управления</p>
         </div>
         
@@ -22,7 +22,7 @@
                 <label style="color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; margin-left: 0.5rem;">Ваше имя</label>
                 <div style="position: relative;">
                     <i class="fa-solid fa-user" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.9rem;"></i>
-                    <input type="text" value="Хоботов Виктор" disabled style="padding-left: 2.75rem; background-color: #f8fafc; border-color: var(--border-soft); color: var(--text-muted); font-weight: 500;">
+                    <input type="text" id="username" name="username" placeholder="Хоботов Виктор" required style="padding-left: 2.75rem;">
                 </div>
             </div>
 
@@ -42,18 +42,20 @@
         <div id="loginMsg" style="margin-top: 1.25rem; font-size: 0.875rem; color: var(--danger); font-weight: 600;"></div>
         
         <div style="margin-top: 3rem; font-size: 0.75rem; color: #94a3b8; line-height: 1.6;">
-            © 2026 Feedback Service. Доступ только для сотрудников компании.
+            © 2026 Price Mirror. Доступ только для сотрудников компании.
         </div>
     </div>
 
     <script>
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
             const msgEl = document.getElementById('loginMsg');
             
             try {
                 const formData = new FormData();
+                formData.append('username', username);
                 formData.append('password', password);
                 
                 const response = await fetch('/api/login', {

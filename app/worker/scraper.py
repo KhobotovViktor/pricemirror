@@ -30,6 +30,10 @@ STORE_SELECTORS = {
     "shatura.com": {
         "price": ["div.price", ".product-price"],
         "image": ["div.product-full-photo img", ".product-image img"]
+    },
+    "alleyadoma.ru": {
+        "price": [".actual-cost-inside .fs-32.font-weight-700.manrope", ".actual-cost-inside", "meta[itemprop='price']"],
+        "image": [".unit-slider-top-inside-tovar.slick-current", "a.unit-slider-top-inside-tovar"]
     }
 }
 
@@ -64,9 +68,10 @@ async def scrape_product_details(url: str):
                     el = await page.wait_for_selector(s, timeout=3000)
                     if el:
                         text = await el.inner_text()
-                        match = re.search(r'(\d+)', text.replace(" ", "").replace("\n", ""))
-                        if match:
-                            price = int(match.group(1))
+                        # Extract only digits, ignoring any whitespace/symbols/currency
+                        clean_text = re.sub(r'[^\d]', '', text)
+                        if clean_text:
+                            price = int(clean_text)
                             break
                 except Exception: continue
                 
@@ -104,9 +109,30 @@ async def scrape_for_product(product_id: int):
     """Business logic: Update prices and images for our product and its competitors"""
     print(f"Scraping visuals for product ID: {product_id}")
     
-    # Get our product to check/update its own image
+    # Get our product details
     our_prod = supabase.table("our_product").select("*").eq("id", product_id).single().execute().data
-    
+    if not our_prod: return False
+
+    # 1. Sync OUR product price and image if URL exists
+    if our_prod.get('url'):
+        print(f"Syncing our own product details: {our_prod['url']}")
+        our_details = await scrape_product_details(our_prod['url'])
+        
+        update_data = {}
+        if our_details['price']:
+            update_data["current_price"] = our_details['price']
+            print(f"Updated OUR price: {our_details['price']}")
+        
+        if our_details['image_url'] and not our_prod.get('image_url'):
+            update_data["image_url"] = our_details['image_url']
+            print(f"Updated OUR image: {our_details['image_url']}")
+            
+        if update_data:
+            supabase.table("our_product").update(update_data).eq("id", product_id).execute()
+            # Refresh local object for comparison
+            our_prod.update(update_data)
+
+    # 2. Sync Competitors
     resp = supabase.table("competitor_product").select("*").eq("our_product_id", product_id).execute()
     
     for cm in resp.data:
@@ -115,9 +141,10 @@ async def scrape_for_product(product_id: int):
         # Update competitor image if found
         if details['image_url']:
             supabase.table("competitor_product").update({"image_url": details['image_url']}).eq("id", cm['id']).execute()
-            # If our product has no image, use the first competitor image found as placeholder
+            # If our product STILL has no image, use the first competitor image found as placeholder
             if not our_prod.get('image_url'):
                 supabase.table("our_product").update({"image_url": details['image_url']}).eq("id", product_id).execute()
+                our_prod["image_url"] = details['image_url']
 
         # Handle price
         if details['price']:

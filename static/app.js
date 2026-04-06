@@ -12,6 +12,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. Add Product Form
     const productForm = document.getElementById('productForm');
+    const urlInput = document.getElementById('productUrlInput');
+    const priceInput = document.getElementById('productPriceInput');
+    const syncStatus = document.getElementById('priceSyncStatus');
+
+    if (urlInput && priceInput) {
+        urlInput.addEventListener('input', () => {
+            const isOurStore = urlInput.value.includes('alleyadoma.ru');
+            priceInput.disabled = isOurStore;
+            syncStatus.style.display = isOurStore ? 'inline-flex' : 'none';
+            
+            if (isOurStore) {
+                priceInput.placeholder = "Автосинхронизация включена";
+                priceInput.style.background = "var(--bg-soft)";
+            } else {
+                priceInput.placeholder = "49990";
+                priceInput.style.background = "white";
+            }
+        });
+    }
+
     if (productForm) {
         productForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -377,10 +397,9 @@ window.handleBatchDelete = async () => {
         hideLoading();
     }
 }
-
 // --- Product Actions ---
 
-async function handleDelete(btn) {
+async function deleteProductById(btn) {
     const id = btn.getAttribute('data-id');
     const name = btn.getAttribute('data-name');
     
@@ -404,7 +423,7 @@ async function handleDelete(btn) {
     }
 }
 
-async function viewAnalytics(productId) {
+async function displayProductAnalytics(productId) {
     const section = document.getElementById('analyticsSection');
     const overlay = document.getElementById('modalOverlay');
     const badge = document.getElementById('recommendationBadge');
@@ -562,8 +581,8 @@ async function loadSettings() {
 }
 
 // Bridge functions
-window.handleAnalytics = (btn) => viewAnalytics(btn.getAttribute('data-id'));
-window.handleDelete = (btn) => handleDelete(btn);
+window.handleAnalytics = (btn) => displayProductAnalytics(btn.getAttribute('data-id'));
+window.handleDelete = (btn) => deleteProductById(btn);
 window.closeAnalytics = () => {
     const s = document.getElementById('analyticsSection');
     const o = document.getElementById('modalOverlay');

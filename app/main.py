@@ -146,19 +146,24 @@ async def get_login_page(request: Request):
     return templates.TemplateResponse(request, "login.html", {"request": request})
 
 @app.post("/api/login")
-async def post_login(password: str = Form(...)):
-    """Validates password and sets JWT cookie"""
+async def post_login(username: str = Form(...), password: str = Form(...)):
+    """Validates username + password and sets JWT cookie"""
     try:
+        # Check Username
+        if username != "Хоботов Виктор":
+            return JSONResponse(status_code=401, content={"status": "error", "message": "Неверный логин или пароль"})
+
+        # Check Password from DB
         resp = supabase.table("system_settings").select("*").eq("key", "admin_password").execute()
         if not resp.data:
             raise HTTPException(status_code=500, detail="Пароль не настроен в БД")
         
         correct_password = resp.data[0]['value']
         if password != correct_password:
-            return JSONResponse(status_code=401, content={"status": "error", "message": "Неверный пароль"})
+            return JSONResponse(status_code=401, content={"status": "error", "message": "Неверный логин или пароль"})
         
-        token = create_access_token({"sub": "admin"})
-        response = JSONResponse(content={"status": "success", "message": "Вход выполнен"})
+        token = create_access_token({"sub": "admin", "username": username})
+        response = JSONResponse(content={"status": "success", "message": f"Добро пожаловать, {username}!"})
         response.set_cookie(key=COOKIE_NAME, value=token, httponly=True, max_age=3600*24)
         return response
     except Exception as e:

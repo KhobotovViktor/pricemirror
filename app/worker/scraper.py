@@ -17,23 +17,30 @@ load_dotenv(dotenv_path=env_path)
 from ..core.database import supabase
 from ..core.notifier import notifier
 
-# Selectors for known stores
+# Initialize OCR reader globally to avoid slow re-initialization on every request
+try:
+    ocr_reader = easyocr.Reader(['ru', 'en'], gpu=False)
+except Exception as e:
+    print(f"OCR init error: {e}")
+    ocr_reader = None
+
+# Selectors for known stores (extended for robustness)
 STORE_SELECTORS = {
     "hoff.ru": {
-        "price": ["div.product-buy__price-new", "span.price", "ins.price-new"],
-        "image": [".slider-main img", "img.slider-main__image", ".product-image img"]
+        "price": [".price-current", "div.product-buy__price-new", "span.price", ".product-price", "ins.price-new"],
+        "image": [".slider-main img", "img.slider-main__image", ".product-image img", "[data-testid='product-image']"]
     },
     "divan.ru": {
-        "price": ["span.price", "div.price-val", ".product-price"],
-        "image": ["img.product-page__photo", ".js-product-photo", ".product-main-photo img"]
+        "price": [".product-price", "span.price", "div.price-val", ".ui-price", ".js-price-value"],
+        "image": ["img.product-page__photo", ".js-product-photo", ".product-main-photo img", ".main-photo img"]
     },
     "shatura.com": {
-        "price": ["div.price", ".product-price"],
-        "image": ["div.product-full-photo img", ".product-image img"]
+        "price": ["div.price", ".product-price", ".current-price"],
+        "image": ["div.product-full-photo img", ".product-image img", ".main-image img"]
     },
     "alleyadoma.ru": {
-        "price": [".actual-cost-inside .fs-32.font-weight-700.manrope", ".actual-cost-inside", "meta[itemprop='price']"],
-        "image": [".unit-slider-top-inside-tovar.slick-current", "a.unit-slider-top-inside-tovar"]
+        "price": [".actual-cost-inside .fs-32.font-weight-700.manrope", ".actual-cost-inside", "meta[itemprop='price']", ".product-price"],
+        "image": [".unit-slider-top-inside-tovar.slick-current", "a.unit-slider-top-inside-tovar", ".main-image"]
     }
 }
 
@@ -62,6 +69,8 @@ async def scrape_product_details(url: str):
             price = None
             image_url = None
             
+            print(f"[{domain}] Checking selectors...")
+            
             # 1. Price Extraction
             for s in selectors["price"]:
                 try:
@@ -72,6 +81,7 @@ async def scrape_product_details(url: str):
                         clean_text = re.sub(r'[^\d]', '', text)
                         if clean_text:
                             price = int(clean_text)
+                            print(f"[{domain}] Found price via selector '{s}': {price}")
                             break
                 except Exception: continue
                 
@@ -86,17 +96,20 @@ async def scrape_product_details(url: str):
                             break
                 except Exception: continue
             
-            # OCR Fallback for price only
-            if not price:
-                screenshot_bytes = await page.screenshot(full_page=False)
-                nparr = np.frombuffer(screenshot_bytes, np.uint8)
-                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                reader = easyocr.Reader(['ru', 'en'])
-                results = reader.readtext(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
-                prices = [int(re.search(r'(\d{3,})', res[1].replace(" ","")).group(1)) 
-                          for res in results if re.search(r'(\d{3,})', res[1].replace(" ",""))]
-                if prices: price = min([p for p in prices if p > 500])
+                if ocr_reader:
+                    screenshot_bytes = await page.screenshot(full_page=False)
+                    nparr = np.frombuffer(screenshot_bytes, np.uint8)
+                    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                    results = ocr_reader.readtext(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+                    prices = [int(re.search(r'(\d{3,})', res[1].replace(" ","")).group(1)) 
+                              for res in results if re.search(r'(\d{3,})', res[1].replace(" ",""))]
+                    if prices: 
+                        price = min([p for p in prices if p > 500])
+                        print(f"[{domain}] Found price via OCR: {price}")
 
+            if not price:
+                print(f"[{domain}] Failed to find price on {url}")
+                
             return {"price": price, "image_url": image_url}
             
         except Exception as e:

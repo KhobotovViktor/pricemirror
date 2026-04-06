@@ -255,7 +255,7 @@ async function loadCompetitorProducts() {
             
             div.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 1rem; flex-grow: 1;">
-                    <input type="checkbox" class="competitor-checkbox" data-id="${item.id}" onclick="event.stopPropagation(); window.updateBatchBar();" style="width: 1.15rem; height: 1.15rem; cursor: pointer; accent-color: var(--primary);">
+                    <input type="checkbox" class="competitor-checkbox" data-id="${item.id}" onclick="event.stopPropagation(); window.updateCompetitorBatchBar();" style="width: 1.15rem; height: 1.15rem; cursor: pointer; accent-color: var(--primary);">
                     <div>
                         <div style="font-weight: 700; color: var(--text-main);">${item.our_product_name}</div>
                         <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">
@@ -410,8 +410,8 @@ window.refreshMapping = async (id, btn) => {
             setTimeout(() => {
                 icon.classList.remove('fa-spin');
                 btn.disabled = false;
-                // Optionally reload specific data or list
-            }, 2000);
+                loadCompetitorProducts(); // Refetch to show the new price
+            }, 3000);
         } else {
             icon.classList.remove('fa-spin');
             btn.disabled = false;

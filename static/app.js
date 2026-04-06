@@ -248,31 +248,37 @@ async function loadCompetitorProducts() {
             const div = document.createElement('div');
             div.className = 'product-item competitor-product-item';
             div.dataset.store = item.store_id;
+            div.dataset.id = item.id;
 
             const diff = item.competitor_price ? (item.our_price - item.competitor_price) : 0;
             const diffClass = diff > 0 ? 'status-danger' : (diff < 0 ? 'status-success' : '');
             
             div.innerHTML = `
-                <div style="flex-grow: 1;">
-                    <div style="font-weight: 700; color: var(--text-main);">${item.our_product_name}</div>
-                    <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">
-                         ${item.store_name} • <a href="${item.url}" target="_blank" style="color: var(--primary); text-decoration: none;">Открыть ссылку <i class="fa-solid fa-external-link" style="font-size: 0.6rem;"></i></a>
+                <div style="display: flex; align-items: center; gap: 1rem; flex-grow: 1;">
+                    <input type="checkbox" class="competitor-checkbox" data-id="${item.id}" onclick="event.stopPropagation(); window.updateBatchBar();" style="width: 1.15rem; height: 1.15rem; cursor: pointer; accent-color: var(--primary);">
+                    <div>
+                        <div style="font-weight: 700; color: var(--text-main);">${item.our_product_name}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">
+                             ${item.store_name} • <a href="${item.url}" target="_blank" style="color: var(--primary); text-decoration: none;">Открыть ссылку <i class="fa-solid fa-external-link" style="font-size: 0.6rem;"></i></a>
+                        </div>
                     </div>
                 </div>
                 <div style="text-align: right; margin-right: 1.5rem;">
                     <div class="price" style="color: var(--text-muted); font-size: 0.9rem; font-weight: 500;">Наш: ${item.our_price.toLocaleString()} ₽</div>
                     <div class="price">${item.competitor_price ? item.competitor_price.toLocaleString() + ' ₽' : 'Сбор...'}</div>
                 </div>
-                <div style="width: 120px; text-align: right;">
-                    ${item.competitor_price ? `
-                        <div class="status-pill ${diffClass}" style="width: 100%; justify-content: center;">
-                            ${diff > 0 ? '+' : ''}${diff.toLocaleString()} ₽
-                        </div>
-                    ` : '<span class="status-pill" style="opacity: 0.5;">Ожидание</span>'}
+                <div style="display: flex; align-items: center; gap: 0.75rem; width: 160px; justify-content: flex-end;">
+                     <div class="status-pill ${item.competitor_price ? diffClass : ''}" style="min-width: 100px; justify-content: center; ${!item.competitor_price ? 'opacity: 0.5;' : ''}">
+                        ${item.competitor_price ? (diff > 0 ? '+' : '') + diff.toLocaleString() + ' ₽' : 'Ожидание'}
+                    </div>
+                    <button class="secondary refresh-mapping-btn" onclick="refreshMapping(${item.id}, this)" title="Обновить цену" style="padding: 0.5rem; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
                 </div>
             `;
             listContainer.appendChild(div);
         });
+        window.updateCompetitorBatchBar();
     } catch (err) {
         console.error('Competitor Load Error:', err);
         listContainer.innerHTML = '<p style="text-align: center; padding: 3rem; color: var(--danger);">Ошибка при загрузке данных мониторинга</p>';
@@ -347,7 +353,91 @@ async function loadGlobalTrend() {
 
 // --- Batch Management Logic ---
 
-window.updateBatchBar = () => {
+window.updateCompetitorBatchBar = () => {
+    const checkboxes = document.querySelectorAll('.competitor-checkbox:checked');
+    const toolbar = document.getElementById('batchScrapeToolbar');
+    const label = document.getElementById('selectedCountLabel');
+    const selectAll = document.getElementById('selectAllCompetitors');
+
+    if (toolbar) {
+        toolbar.style.display = checkboxes.length > 0 ? 'flex' : 'none';
+    }
+    if (label) {
+        label.innerText = `Выбрано: ${checkboxes.length}`;
+    }
+    
+    // Update select all state visually
+    const total = document.querySelectorAll('.competitor-checkbox').length;
+    if (selectAll && total > 0) {
+        selectAll.checked = checkboxes.length === total;
+        selectAll.indeterminate = checkboxes.length > 0 && checkboxes.length < total;
+    }
+};
+
+window.handleBatchScrape = async () => {
+    const ids = Array.from(document.querySelectorAll('.competitor-checkbox:checked')).map(cb => parseInt(cb.dataset.id));
+    if (ids.length === 0) return;
+
+    try {
+        const response = await fetch('/api/scrape/mappings/batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: ids })
+        });
+        
+        if (response.ok) {
+            alert(`🎉 Запущено обновление для ${ids.length} ссылок. Цены обновятся в ближайшее время.`);
+            // Uncheck all and refresh list in background
+            document.querySelectorAll('.competitor-checkbox').forEach(cb => cb.checked = false);
+            window.updateCompetitorBatchBar();
+        } else {
+            alert('Ошибка при запуске массового обновления');
+        }
+    } catch (err) {
+        console.error('Batch error:', err);
+    }
+};
+
+window.refreshMapping = async (id, btn) => {
+    const icon = btn.querySelector('i');
+    icon.classList.add('fa-spin');
+    btn.disabled = true;
+
+    try {
+        const response = await fetch(`/api/scrape/mapping/${id}`, { method: 'POST' });
+        if (response.ok) {
+            // Give it 1 second then revert icon but leave price to async worker
+            setTimeout(() => {
+                icon.classList.remove('fa-spin');
+                btn.disabled = false;
+                // Optionally reload specific data or list
+            }, 2000);
+        } else {
+            icon.classList.remove('fa-spin');
+            btn.disabled = false;
+            alert('Ошибка при запуске обновления');
+        }
+    } catch (err) {
+        icon.classList.remove('fa-spin');
+        btn.disabled = false;
+        console.error('Refresh error:', err);
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    // ... preexisting listeners ...
+    
+    const selectAll = document.getElementById('selectAllCompetitors');
+    if (selectAll) {
+        selectAll.addEventListener('change', (e) => {
+            document.querySelectorAll('.competitor-checkbox').forEach(cb => {
+                cb.checked = e.target.checked;
+            });
+            window.updateCompetitorBatchBar();
+        });
+    }
+});
+window.updateProductBatchBar = () => {
     const bar = document.getElementById('batchActions');
     const checkboxes = document.querySelectorAll('.product-checkbox:checked');
     const count = checkboxes.length;
@@ -364,7 +454,7 @@ window.updateBatchBar = () => {
 
 window.clearSelection = () => {
     document.querySelectorAll('.product-checkbox').forEach(cb => cb.checked = false);
-    updateBatchBar();
+    updateProductBatchBar();
 }
 
 window.handleBatchDelete = async () => {

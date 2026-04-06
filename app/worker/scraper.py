@@ -159,6 +159,43 @@ async def scrape_for_product(product_id: int):
                 
     return True
 
+async def scrape_specific_mapping(mapping_id: int):
+    """Business logic: Update a SINGLE competitor mapping and trigger alerts"""
+    print(f"Scraping SPECIFIC mapping ID: {mapping_id}")
+    
+    # 1. Fetch mapping
+    mapping = supabase.table("competitor_product").select("*, our_product(*)").eq("id", mapping_id).single().execute().data
+    if not mapping:
+        print(f"Mapping {mapping_id} not found")
+        return False
+        
+    our_prod = mapping.get('our_product')
+    
+    # 2. Scrape details
+    details = await scrape_product_details(mapping['url'])
+    
+    # 3. Update competitor image if found
+    if details['image_url']:
+        supabase.table("competitor_product").update({"image_url": details['image_url']}).eq("id", mapping['id']).execute()
+        # If our product still has no image, use this as a placeholder
+        if our_prod and not our_prod.get('image_url'):
+            supabase.table("our_product").update({"image_url": details['image_url']}).eq("id", our_prod['id']).execute()
+
+    # 4. Handle price
+    if details['price']:
+        supabase.table("price_record").insert({
+            "competitor_product_id": mapping['id'],
+            "price": details['price'],
+            "created_at": datetime.utcnow().isoformat()
+        }).execute()
+        
+        # 5. Alerting logic
+        if our_prod and our_prod.get('current_price'):
+            if details['price'] < float(our_prod['current_price']):
+                notifier.send_price_alert(our_prod['name'], our_prod['current_price'], details['price'], mapping['url'])
+                
+    return True
+
 async def monitor_all():
     resp = supabase.table("our_product").select("id").execute()
     for p in resp.data: await scrape_for_product(p['id'])

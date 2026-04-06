@@ -411,12 +411,49 @@ async def add_mapping(background_tasks: BackgroundTasks, product_id: int = Form(
 
 @app.post("/api/scrape/{product_id}")
 async def trigger_scrape(product_id: int, background_tasks: BackgroundTasks):
-    """Manual trigger for scraping"""
+    """Manual trigger for scraping ALL mappings of a product"""
     if not SCRAPER_AVAILABLE:
-        return JSONResponse(status_code=501, content={"status": "error", "message": "Скрапинг недоступен в облачной среде. Запустите скрапер локально."})
+        return JSONResponse(status_code=501, content={"status": "error", "message": "Скрапинг недоступен в облачной среде."})
     
     background_tasks.add_task(scrape_for_product, product_id)
-    return {"status": "accepted", "message": "Сбор цен запущен в фоновом режиме"}
+    return {"status": "accepted", "message": "Сбор цен по товару запущен"}
+
+@app.post("/api/scrape/mapping/{mapping_id}")
+async def trigger_mapping_scrape(mapping_id: int, background_tasks: BackgroundTasks, user_id: str = Depends(get_current_user)):
+    """Manual trigger for a SINGLE competitor mapping"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    if not SCRAPER_AVAILABLE:
+        return JSONResponse(status_code=501, content={"status": "error", "message": "Скрапинг недоступен."})
+
+    from .worker.scraper import scrape_specific_mapping
+    background_tasks.add_task(scrape_specific_mapping, mapping_id)
+    return {"status": "accepted", "message": "Обновление цены запущено"}
+
+@app.post("/api/scrape/mappings/batch")
+async def trigger_batch_scrape(data: dict, background_tasks: BackgroundTasks, user_id: str = Depends(get_current_user)):
+    """Manual trigger for BATCH competitor mappings update"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    if not SCRAPER_AVAILABLE:
+        return JSONResponse(status_code=501, content={"status": "error", "message": "Скрапинг недоступен."})
+
+    mapping_ids = data.get("ids", [])
+    if not mapping_ids:
+        return {"status": "error", "message": "Список ID пуст"}
+
+    from .worker.scraper import scrape_specific_mapping
+    
+    async def process_batch(ids):
+        for mid in ids:
+            try:
+                await scrape_specific_mapping(mid)
+                await asyncio.sleep(1) # Small throttle
+            except Exception as e:
+                print(f"Batch Scrape Error for {mid}: {e}")
+
+    background_tasks.add_task(process_batch, mapping_ids)
+    return {"status": "accepted", "message": f"Запущено массовое обновление ({len(mapping_ids)} позиций)"}
 
 @app.get("/api/dashboard/stats")
 async def get_dashboard_stats():

@@ -271,13 +271,15 @@ function filterCompetitors() {
     const storeId = document.getElementById('competitorStoreFilter').value;
     const priceFilter = document.getElementById('competitorPriceFilter')?.value || 'all';
     const categoryId = document.getElementById('competitorCategoryFilter')?.value || 'all';
+    const query = document.getElementById('competitorSearch')?.value.toLowerCase() || '';
     const items = document.querySelectorAll('.competitor-product-item');
 
     items.forEach(item => {
         const storeMatch = storeId === 'all' || item.dataset.store === storeId;
         const priceMatch = priceFilter === 'all' || item.dataset.priceStatus === priceFilter;
         const categoryMatch = categoryId === 'all' || item.dataset.category === categoryId;
-        item.style.display = (storeMatch && priceMatch && categoryMatch) ? 'flex' : 'none';
+        const nameMatch = !query || (item.dataset.name || '').includes(query);
+        item.style.display = (storeMatch && priceMatch && categoryMatch && nameMatch) ? 'flex' : 'none';
     });
 }
 
@@ -304,6 +306,7 @@ async function loadCompetitorProducts() {
             div.dataset.store = item.store_id;
             div.dataset.id = item.id;
             div.dataset.category = item.category_id ?? '';
+            div.dataset.name = (item.our_product_name || '').toLowerCase();
 
             const diff = item.competitor_price ? (item.our_price - item.competitor_price) : 0;
             const diffClass = diff > 0 ? 'status-danger' : (diff < 0 ? 'status-success' : '');

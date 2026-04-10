@@ -266,14 +266,13 @@ async function loadStores() {
 
 function filterCompetitors() {
     const storeId = document.getElementById('competitorStoreFilter').value;
-    const items = document.querySelectorAll('.competitor-product-item'); // Assuming we use a similar class to product-item
-    
+    const priceFilter = document.getElementById('competitorPriceFilter')?.value || 'all';
+    const items = document.querySelectorAll('.competitor-product-item');
+
     items.forEach(item => {
-        if (storeId === 'all' || item.dataset.store === storeId) {
-            item.style.display = 'flex';
-        } else {
-            item.style.display = 'none';
-        }
+        const storeMatch = storeId === 'all' || item.dataset.store === storeId;
+        const priceMatch = priceFilter === 'all' || item.dataset.priceStatus === priceFilter;
+        item.style.display = (storeMatch && priceMatch) ? 'flex' : 'none';
     });
 }
 
@@ -302,6 +301,15 @@ async function loadCompetitorProducts() {
 
             const diff = item.competitor_price ? (item.our_price - item.competitor_price) : 0;
             const diffClass = diff > 0 ? 'status-danger' : (diff < 0 ? 'status-success' : '');
+
+            // Price status for filtering
+            let priceStatus = 'unknown';
+            if (item.competitor_price) {
+                if (diff > 0) priceStatus = 'higher';
+                else if (diff < 0) priceStatus = 'lower';
+                else priceStatus = 'equal';
+            }
+            div.dataset.priceStatus = priceStatus;
             
             div.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 1rem; flex-grow: 1;">

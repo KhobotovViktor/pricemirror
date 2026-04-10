@@ -224,9 +224,18 @@
                                     <i class="fa-solid fa-arrows-rotate"></i> Обновить цены
                                 </button>
                             </div>
-                            <select id="competitorStoreFilter" style="width: auto; min-width: 180px; margin-bottom: 0;">
-                                <option value="all">Все магазины</option>
-                            </select>
+                            <div style="display: flex; gap: 0.75rem; align-items: center;">
+                                <select id="competitorStoreFilter" style="width: auto; min-width: 180px; margin-bottom: 0;">
+                                    <option value="all">Все магазины</option>
+                                </select>
+                                <select id="competitorPriceFilter" style="width: auto; min-width: 160px; margin-bottom: 0;" onchange="filterCompetitors()">
+                                    <option value="all">Все статусы</option>
+                                    <option value="lower">Цена ниже</option>
+                                    <option value="equal">Цена равна</option>
+                                    <option value="higher">Цена выше</option>
+                                    <option value="unknown">Ожидание</option>
+                                </select>
+                            </div>
                         </div>
                         <div id="competitorLinksList">
                             <div style="text-align: center; padding: 4rem;">

@@ -92,13 +92,11 @@ async def scrape_product_details(url: str):
             print(f"Scraping: {url}")
             
             domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
-            
-            # SPA sites (hoff, divan) need networkidle + longer wait
-            is_spa = domain in ("hoff.ru", "divan.ru")
-            wait_strategy = "networkidle" if is_spa else "domcontentloaded"
-            wait_time = 5 if is_spa else 2
-            
-            response = await page.goto(url, wait_until=wait_strategy, timeout=60000)
+
+            # Use 'load' for all sites — networkidle hangs on pages with
+            # continuous background requests (analytics, ads, chat widgets)
+            response = await page.goto(url, wait_until="load", timeout=60000)
+            wait_time = 4 if domain in ("hoff.ru", "divan.ru") else 2
             await asyncio.sleep(wait_time)
             
             # Prevent scraping a captcha or forbidden page
@@ -139,7 +137,7 @@ async def scrape_product_details(url: str):
                             els.forEach(el => {
                                 const txt = el.innerText?.trim() || el.content || el.getAttribute('content') || '';
                                 if (txt.length < 50) {
-                                    results.push({sel, tag: el.tagName, cls: el.className?.substring(0,80), txt});
+                                    results.push({sel, tag: el.tagName, cls: (typeof el.className === 'string' ? el.className.substring(0,80) : ''), txt});
                                 }
                             });
                         }
@@ -155,7 +153,9 @@ async def scrape_product_details(url: str):
             # 1. Price Extraction
             for s in selectors["price"]:
                 try:
-                    el = await page.wait_for_selector(s, timeout=3000)
+                    # meta tags are never "visible" — use state='attached'
+                    state = 'attached' if s.startswith('meta') else 'visible'
+                    el = await page.wait_for_selector(s, timeout=3000, state=state)
                     if el:
                         tag_name = await el.evaluate('e => e.tagName.toLowerCase()')
                         # meta tags store price in 'content' attribute, not innerText

@@ -475,6 +475,8 @@ async def trigger_mapping_scrape(mapping_id: int, background_tasks: BackgroundTa
     # On Vercel (cloud mode) background tasks are killed after response — run synchronously
     if SCRAPER_MODE == "cloud":
         result = await scrape_specific_mapping(mapping_id)
+        if isinstance(result, dict):
+            return result  # detailed response from cloud scraper
         return {"status": "ok" if result else "error", "message": "Цена обновлена" if result else "Не удалось получить цену"}
 
     background_tasks.add_task(scrape_specific_mapping, mapping_id)
@@ -522,6 +524,19 @@ async def trigger_batch_scrape(data: dict, background_tasks: BackgroundTasks, us
 
     background_tasks.add_task(process_batch, mapping_ids)
     return {"status": "accepted", "message": f"Запущено массовое обновление ({len(mapping_ids)} позиций)"}
+
+@app.get("/api/debug/scrape")
+async def debug_scrape(url: str, user_id: str = Depends(get_current_user)):
+    """Debug endpoint: test price extraction for any URL. Returns raw details."""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    if not SCRAPER_AVAILABLE:
+        return {"scraper_mode": SCRAPER_MODE, "error": "scraper unavailable"}
+    try:
+        details = await scrape_product_details(url)
+        return {"scraper_mode": SCRAPER_MODE, "url": url, "result": details}
+    except Exception as e:
+        return {"scraper_mode": SCRAPER_MODE, "url": url, "error": str(e)}
 
 @app.get("/api/dashboard/stats")
 async def get_dashboard_stats():

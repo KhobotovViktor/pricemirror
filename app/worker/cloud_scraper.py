@@ -36,8 +36,11 @@ HTTP_HEADERS = {
 }
 
 
-def _extract_price_from_html(html: str, url: str) -> int | None:
-    """Extract price from raw HTML via JSON-LD, meta itemprop, or store-specific regex."""
+def _extract_price_from_html(html: str, url: str) -> tuple[int | None, str]:
+    """
+    Extract price from raw HTML. Returns (price, method) or (None, reason).
+    Tries: JSON-LD → __NEXT_DATA__ → meta itemprop → store regex.
+    """
 
     # 1. JSON-LD schema.org
     for block in re.findall(
@@ -62,35 +65,49 @@ def _extract_price_from_html(html: str, url: str) -> int | None:
                     if price_val:
                         cleaned = re.sub(r'[^\d]', '', str(price_val))
                         if cleaned:
-                            return int(cleaned)
+                            return int(cleaned), "json-ld"
         except Exception:
             continue
 
-    # 2. <meta itemprop="price">
+    # 2. Next.js __NEXT_DATA__ (covers hoff.ru and many modern Russian retail sites)
+    m = re.search(r'<script id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>', html, re.DOTALL)
+    if m:
+        try:
+            nd = json.loads(m.group(1))
+            nd_str = json.dumps(nd)
+            # Look for price fields in the SSR data
+            for key in ('"price"', '"currentPrice"', '"salePrice"', '"finalPrice"', '"priceValue"'):
+                pm = re.search(key + r'\s*:\s*(\d{3,7})', nd_str)
+                if pm:
+                    return int(pm.group(1)), "__next_data__"
+        except Exception:
+            pass
+
+    # 3. <meta itemprop="price">
     m = re.search(r'itemprop=["\']price["\'][^>]*content=["\']([^"\']+)["\']', html)
     if not m:
         m = re.search(r'content=["\']([^"\']+)["\'][^>]*itemprop=["\']price["\']', html)
     if m:
         cleaned = re.sub(r'[^\d]', '', m.group(1))
         if cleaned:
-            return int(cleaned)
+            return int(cleaned), "meta-itemprop"
 
-    # 3. Store-specific patterns
+    # 4. Store-specific patterns
     domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
     patterns = {
-        "hoff.ru":       [r'"price"\s*:\s*"?(\d[\d\s]*)"?', r'data-price=["\'](\d+)["\']'],
-        "divan.ru":      [r'"price"\s*:\s*"?(\d[\d\s]*)"?', r'data-price=["\'](\d+)["\']'],
-        "shatura.com":   [r'"price"\s*:\s*"?(\d[\d\s]*)"?'],
-        "alleyadoma.ru": [r'"price"\s*:\s*"?(\d[\d\s]*)"?'],
+        "hoff.ru":       [r'"price"\s*:\s*(\d{3,7})', r'data-price=["\'](\d+)["\']', r'"basePrice"\s*:\s*(\d{3,7})'],
+        "divan.ru":      [r'"price"\s*:\s*(\d{3,7})', r'data-price=["\'](\d+)["\']'],
+        "shatura.com":   [r'"price"\s*:\s*(\d{3,7})'],
+        "alleyadoma.ru": [r'"price"\s*:\s*(\d{3,7})'],
     }
-    for pat in patterns.get(domain, [r'"price"\s*:\s*"?(\d[\d\s]*)"?']):
+    for pat in patterns.get(domain, [r'"price"\s*:\s*(\d{3,7})']):
         m = re.search(pat, html)
         if m:
-            cleaned = re.sub(r'[^\d]', '', m.group(1))
-            if cleaned and len(cleaned) >= 3:
-                return int(cleaned)
+            val = int(m.group(1))
+            if val >= 100:
+                return val, f"regex:{pat[:30]}"
 
-    return None
+    return None, "no-match"
 
 
 async def _scrape_via_httpx(url: str) -> dict:
@@ -99,15 +116,18 @@ async def _scrape_via_httpx(url: str) -> dict:
         async with httpx.AsyncClient(headers=HTTP_HEADERS, follow_redirects=True, timeout=30) as client:
             resp = await client.get(url)
             resp.raise_for_status()
-        price = _extract_price_from_html(resp.text, url)
+            html = resp.text
+        price, method = _extract_price_from_html(html, url)
         if price:
-            print(f"[Cloud/httpx] Price {price} extracted from {url}")
+            print(f"[Cloud/httpx] Price {price} via '{method}' from {url}")
         else:
-            print(f"[Cloud/httpx] Could not extract price from {url}")
-        return {"price": price, "image_url": None}
+            # Log snippet to help debug extraction misses
+            snippet = html[:500].replace('\n', ' ')
+            print(f"[Cloud/httpx] No price (method='{method}') from {url}. HTML snippet: {snippet}")
+        return {"price": price, "image_url": None, "_method": method}
     except Exception as e:
         print(f"[Cloud/httpx] Error fetching {url}: {e}")
-        return {"price": None, "image_url": None}
+        return {"price": None, "image_url": None, "_method": f"error:{e}"}
 
 
 async def scrape_product_details(url: str) -> dict:
@@ -146,8 +166,8 @@ async def scrape_product_details(url: str) -> dict:
     return await _scrape_via_httpx(url)
 
 
-async def scrape_specific_mapping(mapping_id: int) -> bool:
-    """Update a SINGLE competitor mapping and trigger alerts."""
+async def scrape_specific_mapping(mapping_id: int) -> dict:
+    """Update a SINGLE competitor mapping and return detailed result dict."""
     try:
         mapping = (
             supabase.table("competitor_product")
@@ -159,9 +179,10 @@ async def scrape_specific_mapping(mapping_id: int) -> bool:
         )
         if not mapping:
             print(f"[Cloud] Mapping {mapping_id} not found")
-            return False
+            return {"status": "error", "message": f"Mapping {mapping_id} not found"}
 
         details = await scrape_product_details(mapping["url"])
+        method = details.get("_method", "unknown")
 
         if details.get("image_url"):
             supabase.table("competitor_product").update(
@@ -189,12 +210,14 @@ async def scrape_specific_mapping(mapping_id: int) -> bool:
                     details["price"],
                     mapping["url"]
                 )
-            return True
+            return {"status": "ok", "price": details["price"], "method": method,
+                    "message": f"Цена обновлена: {details['price']} ₽"}
 
-        return False
+        return {"status": "error", "price": None, "method": method,
+                "message": f"Не удалось извлечь цену (метод: {method}). Возможно, страница требует JS-рендеринга."}
     except Exception as e:
         print(f"[Cloud] Error scraping mapping {mapping_id}: {e}")
-        return False
+        return {"status": "error", "message": str(e)}
 
 
 async def scrape_our_product_price(product_id: int) -> bool:

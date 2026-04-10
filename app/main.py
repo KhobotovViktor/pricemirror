@@ -25,10 +25,16 @@ except ImportError:
     PISA_AVAILABLE = False
 
 try:
-    from .worker.scraper import scrape_for_product, monitor_all
+    from .worker.scraper import scrape_for_product, monitor_all, scrape_specific_mapping
     SCRAPER_AVAILABLE = True
 except ImportError:
-    SCRAPER_AVAILABLE = False
+    try:
+        from .worker.cloud_scraper import scrape_for_product, monitor_all, scrape_specific_mapping
+        SCRAPER_AVAILABLE = True
+        print("Playwright unavailable — using cloud (httpx) scraper.")
+    except ImportError:
+        SCRAPER_AVAILABLE = False
+        scrape_specific_mapping = None
 
 # Standard path resolution for Phase 9 environment variables
 env_path = Path(__file__).parent.parent / '.env'
@@ -426,7 +432,6 @@ async def trigger_mapping_scrape(mapping_id: int, background_tasks: BackgroundTa
     if not SCRAPER_AVAILABLE:
         return JSONResponse(status_code=501, content={"status": "error", "message": "Скрапинг недоступен."})
 
-    from .worker.scraper import scrape_specific_mapping
     background_tasks.add_task(scrape_specific_mapping, mapping_id)
     return {"status": "accepted", "message": "Обновление цены запущено"}
 
@@ -442,8 +447,6 @@ async def trigger_batch_scrape(data: dict, background_tasks: BackgroundTasks, us
     if not mapping_ids:
         return {"status": "error", "message": "Список ID пуст"}
 
-    from .worker.scraper import scrape_specific_mapping
-    
     async def process_batch(ids):
         for mid in ids:
             try:

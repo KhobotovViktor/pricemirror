@@ -182,7 +182,7 @@
                                     <div class="price">{{ "{:,.0f}".format(prod.current_price or 0).replace(",", " ") }} ₽</div>
                                     <div class="status-pill status-{{ prod.price_status }}">
                                         <span class="status-dot"></span>
-                                        {{ 'Ок' if prod.price_status == 'success' else 'Внимание' if prod.price_status == 'warning' else 'Конфликт' }}
+                                        {{ 'Цена ниже' if prod.price_status == 'success' else 'Цена равна' if prod.price_status == 'warning' else 'Цена выше' if prod.price_status == 'danger' else '—' }}
                                     </div>
                                 </div>
                                 <div style="display: flex; gap: 0.5rem;">

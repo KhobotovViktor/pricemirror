@@ -464,20 +464,35 @@ async def trigger_scrape(product_id: int, background_tasks: BackgroundTasks):
     background_tasks.add_task(scrape_for_product, product_id)
     return {"status": "accepted", "message": "Сбор цен по товару запущен"}
 
+def _enqueue(items: list):
+    """Add items to the local worker queue stored in Supabase system_settings."""
+    import json as _json
+    try:
+        existing = supabase.table("system_settings").select("value").eq("key", "scrape_queue").execute()
+        current = _json.loads(existing.data[0]["value"]) if existing.data else []
+        # Deduplicate by (type, id)
+        keys = {(_i["type"], _i["id"]) for _i in current}
+        for item in items:
+            if (item["type"], item["id"]) not in keys:
+                current.append(item)
+        supabase.table("system_settings").upsert(
+            {"key": "scrape_queue", "value": _json.dumps(current)}, on_conflict="key"
+        ).execute()
+        return True
+    except Exception as e:
+        print(f"Enqueue error: {e}")
+        return False
+
 @app.post("/api/scrape/mapping/{mapping_id}")
 async def trigger_mapping_scrape(mapping_id: int, background_tasks: BackgroundTasks, user_id: str = Depends(get_current_user)):
     """Manual trigger for a SINGLE competitor mapping"""
     if not user_id:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
-    if not SCRAPER_AVAILABLE:
-        return JSONResponse(status_code=501, content={"status": "error", "message": "⚠️ Скрапинг недоступен."})
 
-    # On Vercel (cloud mode) background tasks are killed after response — run synchronously
     if SCRAPER_MODE == "cloud":
-        result = await scrape_specific_mapping(mapping_id)
-        if isinstance(result, dict):
-            return result  # detailed response from cloud scraper
-        return {"status": "ok" if result else "error", "message": "Цена обновлена" if result else "Не удалось получить цену"}
+        ok = _enqueue([{"type": "mapping", "id": mapping_id}])
+        return {"status": "queued" if ok else "error",
+                "message": "Задание передано локальному воркеру. Цена обновится в течение минуты." if ok else "Ошибка очереди"}
 
     background_tasks.add_task(scrape_specific_mapping, mapping_id)
     return {"status": "accepted", "message": "Обновление цены по ссылке запущено"}
@@ -487,12 +502,11 @@ async def trigger_our_product_scrape(product_id: int, background_tasks: Backgrou
     """Manual trigger for OUR OWN product price update"""
     if not user_id:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
-    if not SCRAPER_AVAILABLE:
-        return JSONResponse(status_code=501, content={"status": "error", "message": "⚠️ Обновление цен требует локального скрапера."})
 
     if SCRAPER_MODE == "cloud":
-        result = await scrape_our_product_price(product_id)
-        return {"status": "ok" if result else "error", "message": "Цена обновлена" if result else "Не удалось получить цену"}
+        ok = _enqueue([{"type": "product", "id": product_id}])
+        return {"status": "queued" if ok else "error",
+                "message": "Задание передано локальному воркеру." if ok else "Ошибка очереди"}
 
     background_tasks.add_task(scrape_our_product_price, product_id)
     return {"status": "accepted", "message": "Обновление вашей цены запущено"}
@@ -502,12 +516,16 @@ async def trigger_batch_scrape(data: dict, background_tasks: BackgroundTasks, us
     """Manual trigger for BATCH competitor mappings update"""
     if not user_id:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
-    if not SCRAPER_AVAILABLE:
-        return JSONResponse(status_code=501, content={"status": "error", "message": "⚠️ Массовое обновление цен требует запуска скрапера в локальной среде."})
 
     mapping_ids = data.get("ids", [])
     if not mapping_ids:
         return {"status": "error", "message": "Список ID пуст"}
+
+    if SCRAPER_MODE == "cloud":
+        items = [{"type": "mapping", "id": mid} for mid in mapping_ids]
+        ok = _enqueue(items)
+        return {"status": "queued" if ok else "error",
+                "message": f"Передано {len(mapping_ids)} заданий локальному воркеру." if ok else "Ошибка очереди"}
 
     async def process_batch(ids):
         for mid in ids:
@@ -516,11 +534,6 @@ async def trigger_batch_scrape(data: dict, background_tasks: BackgroundTasks, us
                 await asyncio.sleep(1)
             except Exception as e:
                 print(f"Batch Scrape Error for {mid}: {e}")
-
-    # On Vercel cloud mode — run synchronously
-    if SCRAPER_MODE == "cloud":
-        await process_batch(mapping_ids)
-        return {"status": "ok", "message": f"Обновлено позиций: {len(mapping_ids)}"}
 
     background_tasks.add_task(process_batch, mapping_ids)
     return {"status": "accepted", "message": f"Запущено массовое обновление ({len(mapping_ids)} позиций)"}

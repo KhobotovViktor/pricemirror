@@ -118,10 +118,13 @@ def _extract_price_from_html(html: str, url: str) -> tuple[int | None, str]:
 
 
 async def _scrape_via_httpx(url: str) -> dict:
-    """Direct HTTP scraping using httpx with full Chrome headers."""
-    domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
-    # Add Referer for sites that check it
-    headers = {**HTTP_HEADERS, "Referer": f"https://{domain}/"}
+    """Direct HTTP scraping using httpx. Warms session with homepage first to get cookies."""
+    parsed = urllib.parse.urlparse(url)
+    domain = parsed.netloc.replace("www.", "")
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+
+    headers = {**HTTP_HEADERS, "Referer": origin + "/"}
+
     try:
         async with httpx.AsyncClient(
             headers=headers,
@@ -129,7 +132,20 @@ async def _scrape_via_httpx(url: str) -> dict:
             timeout=30,
             http2=False,
         ) as client:
-            resp = await client.get(url)
+            # Step 1: warm session — visit homepage to acquire cookies
+            try:
+                warm = await client.get(origin + "/", timeout=15)
+                print(f"[Cloud/httpx] Session warm: HTTP {warm.status_code} from {origin}/")
+            except Exception as e:
+                print(f"[Cloud/httpx] Session warm failed (non-fatal): {e}")
+
+            # Step 2: fetch product page with cookies set
+            headers_product = {
+                **headers,
+                "Referer": origin + "/",
+                "Sec-Fetch-Site": "same-origin",
+            }
+            resp = await client.get(url, headers=headers_product)
             html = resp.text
             print(f"[Cloud/httpx] HTTP {resp.status_code} for {url} ({len(html)} bytes)")
 
@@ -145,11 +161,45 @@ async def _scrape_via_httpx(url: str) -> dict:
         return {"price": None, "image_url": None, "_method": f"error:{e}"}
 
 
+async def _try_hoff_api(url: str) -> dict | None:
+    """Try hoff.ru internal product API using product ID extracted from URL slug."""
+    m = re.search(r'_id(\d+)', url)
+    if not m:
+        return None
+    product_id = m.group(1)
+    api_url = f"https://hoff.ru/api/v2/catalog/products/{product_id}/"
+    try:
+        async with httpx.AsyncClient(headers=HTTP_HEADERS, follow_redirects=True, timeout=15) as client:
+            resp = await client.get(api_url)
+            print(f"[Cloud/hoff-api] HTTP {resp.status_code} for product {product_id}")
+            if resp.status_code == 200:
+                data = resp.json()
+                # Try common price field paths
+                price = (
+                    data.get("price")
+                    or data.get("salePrice")
+                    or data.get("currentPrice")
+                    or (data.get("offers") or [{}])[0].get("price")
+                )
+                if price:
+                    return {"price": int(float(str(price).replace(" ", ""))), "image_url": None, "_method": "hoff-api"}
+    except Exception as e:
+        print(f"[Cloud/hoff-api] Error: {e}")
+    return None
+
+
 async def scrape_product_details(url: str) -> dict:
     """
     Extract price from a product page.
     Tries Edge Function first; falls back to direct httpx if unavailable.
     """
+    # 0. Store-specific API shortcuts (bypass bot protection)
+    domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
+    if "hoff.ru" in domain:
+        result = await _try_hoff_api(url)
+        if result:
+            return result
+
     # 1. Try Edge Function (handles JS-rendered pages)
     if EDGE_FUNCTION_URL and SUPABASE_JWT_KEY:
         try:

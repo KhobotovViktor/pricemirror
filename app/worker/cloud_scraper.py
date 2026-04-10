@@ -70,9 +70,13 @@ def _extract_price_from_html(html: str, url: str) -> tuple[int | None, str]:
                 if isinstance(offers, dict):
                     price_val = offers.get("price") or offers.get("lowPrice")
                     if price_val:
-                        cleaned = re.sub(r'[^\d]', '', str(price_val))
-                        if cleaned:
-                            return int(cleaned), "json-ld"
+                        # Use float to preserve decimals, then round (avoids "3392.00" → 339200)
+                        try:
+                            return int(round(float(str(price_val).replace(",", ".").replace(" ", "")))), "json-ld"
+                        except ValueError:
+                            cleaned = re.sub(r'[^\d]', '', str(price_val))
+                            if cleaned:
+                                return int(cleaned), "json-ld"
         except Exception:
             continue
 

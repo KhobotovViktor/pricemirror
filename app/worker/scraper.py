@@ -110,13 +110,25 @@ async def scrape_product_details(url: str):
             print(f"Scraping: {url}")
             
             domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
+            parsed = urllib.parse.urlparse(url)
+            origin = f"{parsed.scheme}://{parsed.netloc}"
+
+            # Sites that block direct navigation — pre-warm session via homepage
+            NEEDS_WARMUP = {"nonton.ru"}
+            if domain in NEEDS_WARMUP:
+                try:
+                    await page.goto(origin + "/", wait_until="load", timeout=30000)
+                    await asyncio.sleep(1)
+                    print(f"[{domain}] Session warmed via homepage")
+                except Exception as e:
+                    print(f"[{domain}] Warmup failed (non-fatal): {e}")
 
             # Use 'load' for all sites — networkidle hangs on pages with
             # continuous background requests (analytics, ads, chat widgets)
             response = await page.goto(url, wait_until="load", timeout=60000)
             wait_time = 2
             await asyncio.sleep(wait_time)
-            
+
             # Prevent scraping a captcha or forbidden page
             if response and response.status in (403, 404, 429, 500, 502, 503):
                 print(f"[{domain}] HTTP Error {response.status}, aborting scrape.")
@@ -175,27 +187,42 @@ async def scrape_product_details(url: str):
             if not price:
                 try:
                     js_price = await page.evaluate('''() => {
+                        // Helper: parse price string preserving decimals, then round
+                        function parsePrice(val) {
+                            const s = String(val).trim();
+                            // If value looks like a float (e.g. "3392.00"), parse as float
+                            const f = parseFloat(s.replace(/[^0-9.]/g, '').replace(/\.(?=.*\.)/g, ''));
+                            return isNaN(f) ? null : Math.round(f);
+                        }
+
                         // Method 1: Schema.org meta tag
                         const meta = document.querySelector('meta[itemprop="price"]');
-                        if (meta && meta.content) return parseInt(meta.content.replace(/[^0-9]/g, ''));
-                        
+                        if (meta && meta.content) { const p = parsePrice(meta.content); if (p) return p; }
+
                         // Method 2: JSON-LD structured data
                         const scripts = document.querySelectorAll('script[type="application/ld+json"]');
                         for (const s of scripts) {
                             try {
                                 const data = JSON.parse(s.textContent);
-                                const offer = data.offers || data;
-                                if (offer.price) return parseInt(String(offer.price).replace(/[^0-9]/g, ''));
-                                if (offer.lowPrice) return parseInt(String(offer.lowPrice).replace(/[^0-9]/g, ''));
+                                const items = Array.isArray(data) ? data : [data];
+                                for (const item of items) {
+                                    const offer = item.offers || (item['@type'] === 'Offer' ? item : null);
+                                    const offerList = Array.isArray(offer) ? offer : (offer ? [offer] : []);
+                                    for (const o of offerList) {
+                                        const p = parsePrice(o.price || o.lowPrice);
+                                        if (p && p > 100) return p;
+                                    }
+                                    const p = parsePrice(item.price);
+                                    if (p && p > 100) return p;
+                                }
                             } catch(e) {}
                         }
-                        
+
                         // Method 3: itemprop="price" on any element
                         const priceEl = document.querySelector('[itemprop="price"]');
                         if (priceEl) {
-                            const val = priceEl.content || priceEl.textContent;
-                            const clean = val.replace(/[^0-9]/g, '');
-                            if (clean) return parseInt(clean);
+                            const p = parsePrice(priceEl.content || priceEl.textContent);
+                            if (p) return p;
                         }
                         
                         return null;

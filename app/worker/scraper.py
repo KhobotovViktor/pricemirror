@@ -1,9 +1,6 @@
 import asyncio
 import re
 import urllib.parse
-import numpy as np
-import cv2
-import easyocr
 from playwright.async_api import async_playwright
 from datetime import datetime
 from dotenv import load_dotenv
@@ -18,10 +15,16 @@ from ..core.database import supabase
 from ..core.notifier import notifier
 
 # Initialize OCR reader globally to avoid slow re-initialization on every request
+# Heavy deps (numpy, cv2, easyocr) are optional — scraping works without them
 try:
+    import numpy as np
+    import cv2
+    import easyocr
     ocr_reader = easyocr.Reader(['ru', 'en'], gpu=False)
 except Exception as e:
-    print(f"OCR init error: {e}")
+    print(f"OCR init skipped (optional deps unavailable): {e}")
+    np = None
+    cv2 = None
     ocr_reader = None
 
 # Selectors for known stores (extended for robustness)

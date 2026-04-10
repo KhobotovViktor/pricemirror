@@ -17,19 +17,69 @@ document.addEventListener('DOMContentLoaded', () => {
     const syncStatus = document.getElementById('priceSyncStatus');
 
     if (urlInput && priceInput) {
-        urlInput.addEventListener('input', () => {
-            const isOurStore = urlInput.value.includes('alleyadoma.ru');
-            priceInput.disabled = isOurStore;
-            syncStatus.style.display = isOurStore ? 'inline-flex' : 'none';
+        let lastUrl = "";
+        const handleUrlChange = async () => {
+            const url = urlInput.value.trim();
+            if (url === lastUrl) return;
+            lastUrl = url;
+
+            const isOurStore = url.includes('alleyadoma.ru');
             
-            if (isOurStore) {
-                priceInput.placeholder = "Автосинхронизация включена";
+            // Standard state
+            priceInput.disabled = isOurStore;
+            if (syncStatus) {
+                syncStatus.style.display = isOurStore ? 'inline-flex' : 'none';
+                syncStatus.innerHTML = '<i class="fa-solid fa-sync fa-spin"></i> Авто';
+                syncStatus.style.color = "var(--primary)";
+            }
+            
+            if (isOurStore && url.length > 20) {
+                // If it's our store, fetch price immediately
+                priceInput.placeholder = "Получаем актуальную цену...";
                 priceInput.style.background = "var(--bg-soft)";
-            } else {
+                
+                try {
+                    const response = await fetch(`/api/scrape/preview?url=${encodeURIComponent(url)}`, {credentials: 'include'});
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.price) {
+                            priceInput.value = data.price;
+                            priceInput.placeholder = "";
+                            if (syncStatus) {
+                                syncStatus.innerHTML = '<i class="fa-solid fa-check-circle"></i> Готово';
+                                syncStatus.style.color = "var(--success)";
+                            }
+                        } else {
+                            priceInput.placeholder = "Цена не найдена, введите вручную";
+                            priceInput.disabled = false;
+                            if (syncStatus) {
+                                syncStatus.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Ошибка';
+                                syncStatus.style.color = "var(--danger)";
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("Preview error:", err);
+                    priceInput.disabled = false;
+                }
+            } else if (!isOurStore) {
                 priceInput.placeholder = "49990";
                 priceInput.style.background = "white";
+                priceInput.title = "";
+                priceInput.disabled = false;
+            }
+        };
+
+        urlInput.addEventListener('input', () => {
+            if (urlInput.value.includes('alleyadoma.ru')) {
+                // Debounce simple
+                setTimeout(handleUrlChange, 500);
+            } else {
+                handleUrlChange();
             }
         });
+        urlInput.addEventListener('change', handleUrlChange);
+        urlInput.addEventListener('paste', () => setTimeout(handleUrlChange, 100));
     }
 
     if (productForm) {
@@ -406,7 +456,7 @@ window.refreshMapping = async (id, btn) => {
     try {
         const response = await fetch(`/api/scrape/mapping/${id}`, { method: 'POST' });
         if (response.ok) {
-            // Give it 1 second then revert icon but leave price to async worker
+            // Give it time then revert icon but leave price to async worker
             setTimeout(() => {
                 icon.classList.remove('fa-spin');
                 btn.disabled = false;
@@ -421,6 +471,31 @@ window.refreshMapping = async (id, btn) => {
         icon.classList.remove('fa-spin');
         btn.disabled = false;
         console.error('Refresh error:', err);
+    }
+};
+
+window.refreshOurProduct = async (id, btn) => {
+    const icon = btn.querySelector('i');
+    icon.classList.add('fa-spin');
+    btn.disabled = true;
+
+    try {
+        const response = await fetch(`/api/scrape/our-product/${id}`, { method: 'POST' });
+        if (response.ok) {
+            setTimeout(() => {
+                icon.classList.remove('fa-spin');
+                btn.disabled = false;
+                location.reload(); // Refresh to show our updated price
+            }, 3000);
+        } else {
+            icon.classList.remove('fa-spin');
+            btn.disabled = false;
+            alert('Ошибка при запуске обновления вашей цены');
+        }
+    } catch (err) {
+        icon.classList.remove('fa-spin');
+        btn.disabled = false;
+        console.error('Our product refresh error:', err);
     }
 };
 

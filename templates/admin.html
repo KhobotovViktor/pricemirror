@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Furniture Admin | PREMIUM</title>
+    <title>Price Mirror</title>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -135,7 +135,7 @@
                             <div style="display: flex; gap: 0.75rem; flex-grow: 1; justify-content: flex-end;">
                                 <div style="position: relative; width: 220px;">
                                     <i class="fa-solid fa-layer-group" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.85rem;"></i>
-                                    <select id="categoryFilter" style="padding-left: 2.75rem; height: 42px;">
+                                    <select id="categoryFilter" style="padding-left: 2.75rem; height: 48px; padding-top: 0; padding-bottom: 0;">
                                         <option value="all">Все категории</option>
                                         {% for cat in categories %}
                                         <option value="{{ cat.id }}">{{ cat.name }}</option>
@@ -144,7 +144,7 @@
                                 </div>
                                 <div style="position: relative; width: 300px;">
                                     <i class="fa-solid fa-search" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
-                                    <input type="text" id="catalogSearch" placeholder="Поиск по названию..." style="padding-left: 2.75rem; height: 42px;">
+                                    <input type="text" id="catalogSearch" placeholder="Поиск по названию..." style="padding-left: 2.75rem; height: 48px;">
                                 </div>
                             </div>
                         </div>
@@ -186,10 +186,13 @@
                                     </div>
                                 </div>
                                 <div style="display: flex; gap: 0.5rem;">
-                                    <button data-id="{{ prod.id }}" onclick="handleAnalytics(this)" class="secondary" style="padding: 0.5rem 1rem;">
+                                    <button data-id="{{ prod.id }}" onclick="refreshOurProduct({{ prod.id }}, this)" class="secondary" title="Обновить цену с сайта" style="padding: 0.5rem 1rem;">
+                                        <i class="fa-solid fa-rotate"></i>
+                                    </button>
+                                    <button data-id="{{ prod.id }}" onclick="handleAnalytics(this)" class="secondary" title="Аналитика" style="padding: 0.5rem 1rem;">
                                         <i class="fa-solid fa-chart-simple"></i>
                                     </button>
-                                    <button data-id="{{ prod.id }}" data-name="{{ prod.name }}" onclick="handleDelete(this)" class="secondary" style="color: var(--danger); padding: 0.5rem 1rem;">
+                                    <button data-id="{{ prod.id }}" data-name="{{ prod.name }}" onclick="handleDelete(this)" class="secondary" title="Удалить" style="color: var(--danger); padding: 0.5rem 1rem;">
                                         <i class="fa-solid fa-trash-can"></i>
                                     </button>
                                 </div>

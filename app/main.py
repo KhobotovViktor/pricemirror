@@ -1,8 +1,16 @@
+import sys
+import asyncio
+
+# Critical fix for Windows: Use ProactorEventLoop to support subprocesses (like Playwright)
+if sys.platform == 'win32':
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from fastapi import FastAPI, Depends, HTTPException, Request, Form, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from contextlib import asynccontextmanager
 import os
 import io
 import csv
@@ -27,14 +35,52 @@ except ImportError:
 try:
     from .worker.scraper import scrape_for_product, monitor_all
     SCRAPER_AVAILABLE = True
+    SCRAPER_MODE = "playwright"
 except ImportError:
-    SCRAPER_AVAILABLE = False
+    try:
+        from .worker.cloud_scraper import scrape_for_product, monitor_all
+        SCRAPER_AVAILABLE = True
+        SCRAPER_MODE = "cloud"
+    except ImportError:
+        SCRAPER_AVAILABLE = False
+        SCRAPER_MODE = "none"
 
 # Standard path resolution for Phase 9 environment variables
 env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
-app = FastAPI(title="Furniture Competitor Monitor")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initializes background tasks and handles startup/shutdown securely"""
+    print("DEBUG: [Lifespan] Starting initialization...", flush=True)
+    # 1. Verify Event Loop Policy on Windows
+    if sys.platform == 'win32':
+        loop = asyncio.get_event_loop()
+        print(f"DEBUG: [Lifespan] Current Event Loop: {type(loop).__name__}", flush=True)
+        if not isinstance(loop, asyncio.WindowsProactorEventLoopPolicy._loop_factory): # type: ignore
+             print("WARNING: [Lifespan] Loop is not Proactor! Playwright might fail.", flush=True)
+
+    # 2. Start Scheduler
+    if SCRAPER_AVAILABLE:
+        try:
+            print(f"DEBUG: [Lifespan] Adding scheduler job (monitor_all)...", flush=True)
+            scheduler.add_job(monitor_all, 'interval', hours=12)
+            print("DEBUG: [Lifespan] Starting APScheduler...", flush=True)
+            scheduler.start()
+            print("DEBUG: [Lifespan] APScheduler started successfully.", flush=True)
+        except Exception as e:
+            print(f"CRITICAL LIFESPAN STARTUP ERROR: {e}", flush=True)
+    else:
+        print("DEBUG: [Lifespan] Scraper not found, skipping scheduler.", flush=True)
+    
+    yield
+    
+    # 3. Shutdown
+    print("DEBUG: [Lifespan] Shutting down...")
+    if scheduler.running:
+        scheduler.shutdown()
+
+app = FastAPI(title="Furniture Competitor Monitor", lifespan=lifespan)
 SECRET_KEY = os.getenv("SECRET_KEY", "FURNITURE_MONITOR_SECRET_PROD") 
 ALGORITHM = "HS256"
 COOKIE_NAME = "auth_token"
@@ -176,23 +222,6 @@ async def logout():
     response.delete_cookie(COOKIE_NAME)
     return response
 
-@app.on_event("startup")
-async def startup_event():
-    """Initializes background tasks on server start"""
-    print("DEBUG: [Startup] Starting initialization...")
-    # Scheduler should only run if scraper is actually available (not in Slim mode)
-    if SCRAPER_AVAILABLE:
-        try:
-            print(f"DEBUG: [Startup] Adding scheduler job (monitor_all)...")
-            scheduler.add_job(monitor_all, 'interval', hours=12)
-            print("DEBUG: [Startup] Starting APScheduler...")
-            scheduler.start()
-            print("DEBUG: [Startup] APScheduler started successfully.")
-        except Exception as e:
-            print(f"CRITICAL STARTUP ERROR: {e}")
-    else:
-        print("DEBUG: [Startup] Scraper not found, skipping scheduler.")
-    print("DEBUG: [Startup] Initialization complete.")
 
 # Resolving paths relative to the project root
 ROOT_DIR = Path(__file__).parent.parent.resolve()
@@ -229,19 +258,15 @@ async def get_admin_panel(request: Request, user_id: str = Depends(get_current_u
         categories = supabase.table("product_category").select("*").order("name").execute().data
         products_raw = supabase.table("our_product").select("*, category:product_category(name)").order("name").execute().data
         
-        # Get ALL mappings to calculate statuses in one go
-        all_mappings = supabase.table("competitor_product").select("*, price_record(*)").execute().data
+        # OPTIMIZED: Fetch only the necessary mapping fields with precomputed last_price
+        all_mappings = supabase.table("competitor_product").select("id, our_product_id, last_price").execute().data
         
         products = []
         for p in products_raw:
             p_mappings = [m for m in all_mappings if m['our_product_id'] == p['id']]
             
-            latest_prices = []
-            for m in p_mappings:
-                records = m.get('price_record', [])
-                if records:
-                    latest = sorted(records, key=lambda x: x['created_at'])[-1]
-                    latest_prices.append(float(latest['price']))
+            # Simple list extraction from precomputed values (no history join!)
+            latest_prices = [float(m['last_price']) for m in p_mappings if m.get('last_price')]
             
             min_comp = min(latest_prices) if latest_prices else None
             our_price = float(p['current_price']) if p.get('current_price') else 0
@@ -271,6 +296,7 @@ async def get_admin_panel(request: Request, user_id: str = Depends(get_current_u
 
 @app.post("/api/products")
 async def add_product(
+    background_tasks: BackgroundTasks,
     name: str = Form(...), 
     category_id: int = Form(...), 
     url: str = Form(None), 
@@ -290,9 +316,28 @@ async def add_product(
     }
     try:
         result = supabase.table("our_product").insert(data).execute()
+        if result.data and url and "alleyadoma.ru" in url and SCRAPER_AVAILABLE:
+            # Trigger immediate scrape for our own product if URL is provided
+            product_id = result.data[0]['id']
+            from .worker.scraper import scrape_our_product_price
+            background_tasks.add_task(scrape_our_product_price, product_id)
+            
         return result.data[0] if result.data else {"status": "ok"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/api/scrape/preview")
+async def preview_price(url: str, user_id: str = Depends(get_current_user)):
+    """Live preview of price before adding product"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        from .worker.scraper import scrape_product_details
+        details = await scrape_product_details(url)
+        return details
+    except Exception as e:
+        print(f"PREVIEW ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/1c/prices")
 async def get_prices_for_1c(user_id: str = Depends(get_current_user)):
@@ -424,11 +469,23 @@ async def trigger_mapping_scrape(mapping_id: int, background_tasks: BackgroundTa
     if not user_id:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
     if not SCRAPER_AVAILABLE:
-        return JSONResponse(status_code=501, content={"status": "error", "message": "Скрапинг недоступен."})
+        return JSONResponse(status_code=501, content={"status": "error", "message": "⚠️ Скрапинг недоступен на Vercel. Пожалуйста, запустите воркер в локальной среде."})
 
     from .worker.scraper import scrape_specific_mapping
     background_tasks.add_task(scrape_specific_mapping, mapping_id)
-    return {"status": "accepted", "message": "Обновление цены запущено"}
+    return {"status": "accepted", "message": "Обновление цены по ссылке запущено"}
+
+@app.post("/api/scrape/our-product/{product_id}")
+async def trigger_our_product_scrape(product_id: int, background_tasks: BackgroundTasks, user_id: str = Depends(get_current_user)):
+    """Manual trigger for OUR OWN product price update"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    if not SCRAPER_AVAILABLE:
+        return JSONResponse(status_code=501, content={"status": "error", "message": "⚠️ Обновление цен требует локального скрапера."})
+
+    from .worker.scraper import scrape_our_product_price
+    background_tasks.add_task(scrape_our_product_price, product_id)
+    return {"status": "accepted", "message": "Обновление вашей цены запущено"}
 
 @app.post("/api/scrape/mappings/batch")
 async def trigger_batch_scrape(data: dict, background_tasks: BackgroundTasks, user_id: str = Depends(get_current_user)):
@@ -436,7 +493,7 @@ async def trigger_batch_scrape(data: dict, background_tasks: BackgroundTasks, us
     if not user_id:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
     if not SCRAPER_AVAILABLE:
-        return JSONResponse(status_code=501, content={"status": "error", "message": "Скрапинг недоступен."})
+        return JSONResponse(status_code=501, content={"status": "error", "message": "⚠️ Массовое обновление цен требует запуска скрапера в локальной среде."})
 
     mapping_ids = data.get("ids", [])
     if not mapping_ids:
@@ -457,29 +514,40 @@ async def trigger_batch_scrape(data: dict, background_tasks: BackgroundTasks, us
 
 @app.get("/api/dashboard/stats")
 async def get_dashboard_stats():
-    """Aggregates global statistics for the overview panel"""
+    """Aggregates global statistics for the overview panel using optimized denormalized data"""
     try:
         products = supabase.table("our_product").select("*").execute().data
-        all_mappings = supabase.table("competitor_product").select("*, price_record(*)").execute().data
+        # Optimized: Fetch only necessary fields from competitor_product
+        # We use already existing last_price and last_scrape columns for instant response
+        all_mappings = supabase.table("competitor_product").select("our_product_id, last_price, last_scrape").execute().data
         
         at_risk = 0
         total_gap = 0
-        last_sync = None
+        latest_global_sync = None
         
+        # Pre-group mappings by product_id for O(N) lookup
+        from collections import defaultdict
+        mappings_by_product = defaultdict(list)
+        for m in all_mappings:
+            mappings_by_product[m['our_product_id']].append(m)
+            
         for p in products:
             our_price = float(p['current_price']) if p.get('current_price') else 0
-            p_mappings = [m for m in all_mappings if m['our_product_id'] == p['id']]
+            p_mappings = mappings_by_product[p['id']]
             
             latest_prices = []
             for m in p_mappings:
-                records = m.get('price_record', [])
-                if records:
-                    latest = sorted(records, key=lambda x: x['created_at'])[-1]
-                    latest_prices.append(float(latest['price']))
-                    # Track global last sync
-                    ts = datetime.fromisoformat(latest['created_at'].replace('Z', '+00:00'))
-                    if not last_sync or ts > last_sync:
-                        last_sync = ts
+                if m.get('last_price'):
+                    latest_prices.append(float(m['last_price']))
+                    
+                # Track global last sync
+                if m.get('last_scrape'):
+                    try:
+                        ts = datetime.fromisoformat(m['last_scrape'].replace('Z', '+00:00'))
+                        if not latest_global_sync or ts > latest_global_sync:
+                            latest_global_sync = ts
+                    except Exception:
+                        continue
             
             if latest_prices:
                 min_comp = min(latest_prices)
@@ -491,7 +559,7 @@ async def get_dashboard_stats():
             "total_products": len(products),
             "at_risk": at_risk,
             "avg_gap": round(total_gap / at_risk, 2) if at_risk > 0 else 0,
-            "last_sync": last_sync.strftime("%d.%m %H:%M") if last_sync else "—"
+            "last_sync": latest_global_sync.strftime("%d.%m %H:%M") if latest_global_sync else "—"
         }
     except Exception as e:
         print(f"STATS ERROR: {e}")
@@ -598,6 +666,32 @@ async def batch_delete_products(data: dict, user_id: str = Depends(get_current_u
         return {"status": "success", "message": f"Удалено товаров: {len(ids)}"}
     except Exception as e:
         print(f"BATCH DELETE ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/products/{product_id}")
+async def delete_single_product(product_id: int, user_id: str = Depends(get_current_user)):
+    """Deletes a single product and its history"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+        
+    try:
+        # 1. Gather mapping IDs
+        mappings = supabase.table("competitor_product").select("id").eq("our_product_id", product_id).execute().data
+        mapping_ids = [m['id'] for m in mappings]
+        
+        # 2. Delete price records
+        if mapping_ids:
+            supabase.table("price_record").delete().in_("competitor_product_id", mapping_ids).execute()
+        
+        # 3. Delete mappings
+        supabase.table("competitor_product").delete().eq("our_product_id", product_id).execute()
+        
+        # 4. Delete product
+        supabase.table("our_product").delete().eq("id", product_id).execute()
+        
+        return {"status": "success", "message": "Товар удален"}
+    except Exception as e:
+        print(f"DELETE ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.patch("/api/products/{product_id}")

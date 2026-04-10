@@ -470,7 +470,12 @@ async def trigger_mapping_scrape(mapping_id: int, background_tasks: BackgroundTa
     if not user_id:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
     if not SCRAPER_AVAILABLE:
-        return JSONResponse(status_code=501, content={"status": "error", "message": "⚠️ Скрапинг недоступен на Vercel. Пожалуйста, запустите воркер в локальной среде."})
+        return JSONResponse(status_code=501, content={"status": "error", "message": "⚠️ Скрапинг недоступен."})
+
+    # On Vercel (cloud mode) background tasks are killed after response — run synchronously
+    if SCRAPER_MODE == "cloud":
+        result = await scrape_specific_mapping(mapping_id)
+        return {"status": "ok" if result else "error", "message": "Цена обновлена" if result else "Не удалось получить цену"}
 
     background_tasks.add_task(scrape_specific_mapping, mapping_id)
     return {"status": "accepted", "message": "Обновление цены по ссылке запущено"}
@@ -482,6 +487,10 @@ async def trigger_our_product_scrape(product_id: int, background_tasks: Backgrou
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
     if not SCRAPER_AVAILABLE:
         return JSONResponse(status_code=501, content={"status": "error", "message": "⚠️ Обновление цен требует локального скрапера."})
+
+    if SCRAPER_MODE == "cloud":
+        result = await scrape_our_product_price(product_id)
+        return {"status": "ok" if result else "error", "message": "Цена обновлена" if result else "Не удалось получить цену"}
 
     background_tasks.add_task(scrape_our_product_price, product_id)
     return {"status": "accepted", "message": "Обновление вашей цены запущено"}
@@ -502,9 +511,14 @@ async def trigger_batch_scrape(data: dict, background_tasks: BackgroundTasks, us
         for mid in ids:
             try:
                 await scrape_specific_mapping(mid)
-                await asyncio.sleep(1) # Small throttle
+                await asyncio.sleep(1)
             except Exception as e:
                 print(f"Batch Scrape Error for {mid}: {e}")
+
+    # On Vercel cloud mode — run synchronously
+    if SCRAPER_MODE == "cloud":
+        await process_batch(mapping_ids)
+        return {"status": "ok", "message": f"Обновлено позиций: {len(mapping_ids)}"}
 
     background_tasks.add_task(process_batch, mapping_ids)
     return {"status": "accepted", "message": f"Запущено массовое обновление ({len(mapping_ids)} позиций)"}

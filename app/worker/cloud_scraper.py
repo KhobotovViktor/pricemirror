@@ -26,13 +26,20 @@ SUPABASE_JWT_KEY = os.getenv("SUPABASE_JWT_KEY", "")
 EDGE_FUNCTION_URL = f"{SUPABASE_URL}/functions/v1/scrape-price" if SUPABASE_URL else ""
 
 HTTP_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/122.0.0.0 Safari/537.36"
-    ),
-    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Cache-Control": "max-age=0",
 }
 
 
@@ -111,20 +118,28 @@ def _extract_price_from_html(html: str, url: str) -> tuple[int | None, str]:
 
 
 async def _scrape_via_httpx(url: str) -> dict:
-    """Direct HTTP scraping fallback using httpx + regex."""
+    """Direct HTTP scraping using httpx with full Chrome headers."""
+    domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
+    # Add Referer for sites that check it
+    headers = {**HTTP_HEADERS, "Referer": f"https://{domain}/"}
     try:
-        async with httpx.AsyncClient(headers=HTTP_HEADERS, follow_redirects=True, timeout=30) as client:
+        async with httpx.AsyncClient(
+            headers=headers,
+            follow_redirects=True,
+            timeout=30,
+            http2=False,
+        ) as client:
             resp = await client.get(url)
-            resp.raise_for_status()
             html = resp.text
+            print(f"[Cloud/httpx] HTTP {resp.status_code} for {url} ({len(html)} bytes)")
+
         price, method = _extract_price_from_html(html, url)
         if price:
-            print(f"[Cloud/httpx] Price {price} via '{method}' from {url}")
+            print(f"[Cloud/httpx] Price {price} via '{method}'")
         else:
-            # Log snippet to help debug extraction misses
-            snippet = html[:500].replace('\n', ' ')
-            print(f"[Cloud/httpx] No price (method='{method}') from {url}. HTML snippet: {snippet}")
-        return {"price": price, "image_url": None, "_method": method}
+            snippet = html[:300].replace('\n', ' ')
+            print(f"[Cloud/httpx] No price (method='{method}'). Snippet: {snippet}")
+        return {"price": price, "image_url": None, "_method": method, "_http_status": resp.status_code}
     except Exception as e:
         print(f"[Cloud/httpx] Error fetching {url}: {e}")
         return {"price": None, "image_url": None, "_method": f"error:{e}"}

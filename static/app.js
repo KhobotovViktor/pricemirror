@@ -228,15 +228,18 @@ function initSearch(inputId, itemSelector) {
 function handleProductFilter() {
     const query = document.getElementById('catalogSearch')?.value.toLowerCase() || '';
     const categoryId = document.getElementById('categoryFilter')?.value || 'all';
-    
-    document.querySelectorAll('.product-item').forEach(item => {
+    const statusFilter = document.getElementById('statusFilter')?.value || 'all';
+
+    document.querySelectorAll('#productList .product-item').forEach(item => {
         const name = item.dataset.name || '';
         const itemCategory = item.dataset.category || '';
-        
+        const itemStatus = item.dataset.status || 'neutral';
+
         const matchesSearch = name.includes(query);
         const matchesCategory = (categoryId === 'all' || itemCategory === categoryId);
-        
-        item.style.display = (matchesSearch && matchesCategory) ? 'flex' : 'none';
+        const matchesStatus = (statusFilter === 'all' || itemStatus === statusFilter);
+
+        item.style.display = (matchesSearch && matchesCategory && matchesStatus) ? 'flex' : 'none';
     });
 }
 
@@ -267,12 +270,14 @@ async function loadStores() {
 function filterCompetitors() {
     const storeId = document.getElementById('competitorStoreFilter').value;
     const priceFilter = document.getElementById('competitorPriceFilter')?.value || 'all';
+    const categoryId = document.getElementById('competitorCategoryFilter')?.value || 'all';
     const items = document.querySelectorAll('.competitor-product-item');
 
     items.forEach(item => {
         const storeMatch = storeId === 'all' || item.dataset.store === storeId;
         const priceMatch = priceFilter === 'all' || item.dataset.priceStatus === priceFilter;
-        item.style.display = (storeMatch && priceMatch) ? 'flex' : 'none';
+        const categoryMatch = categoryId === 'all' || item.dataset.category === categoryId;
+        item.style.display = (storeMatch && priceMatch && categoryMatch) ? 'flex' : 'none';
     });
 }
 
@@ -298,6 +303,7 @@ async function loadCompetitorProducts() {
             div.className = 'product-item competitor-product-item';
             div.dataset.store = item.store_id;
             div.dataset.id = item.id;
+            div.dataset.category = item.category_id ?? '';
 
             const diff = item.competitor_price ? (item.our_price - item.competitor_price) : 0;
             const diffClass = diff > 0 ? 'status-danger' : (diff < 0 ? 'status-success' : '');

@@ -765,7 +765,7 @@ async def get_all_competitor_products(user_id: str = Depends(get_current_user)):
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
     try:
         # Fetch mappings with store and our product info
-        mappings = supabase.table("competitor_product").select("*, competitor_store(name), our_product(name, current_price), price_record(*)").execute().data
+        mappings = supabase.table("competitor_product").select("*, competitor_store(name), our_product(name, current_price, category_id), price_record(*)").execute().data
         
         result = []
         for m in mappings:
@@ -782,7 +782,8 @@ async def get_all_competitor_products(user_id: str = Depends(get_current_user)):
                 "our_product_name": m['our_product']['name'] if m.get('our_product') else "—",
                 "our_price": float(m['our_product']['current_price']) if m.get('our_product') and m['our_product'].get('current_price') else 0,
                 "competitor_price": latest_price,
-                "store_id": m['store_id']
+                "store_id": m['store_id'],
+                "category_id": m['our_product']['category_id'] if m.get('our_product') else None,
             })
         return result
     except Exception as e:

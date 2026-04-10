@@ -448,9 +448,17 @@ async def add_mapping(background_tasks: BackgroundTasks, product_id: int = Form(
         "url": competitor_url
     }
     try:
-        supabase.table("competitor_product").insert(data).execute()
+        result = supabase.table("competitor_product").upsert(
+            data, on_conflict="our_product_id,store_id"
+        ).execute()
         # Trigger immediate scrape for this product
-        background_tasks.add_task(scrape_for_product, product_id)
+        if SCRAPER_MODE == "cloud":
+            product_data = result.data[0] if result.data else {}
+            mapping_id = product_data.get("id")
+            if mapping_id:
+                _enqueue([{"type": "mapping", "id": mapping_id}])
+        elif SCRAPER_AVAILABLE:
+            background_tasks.add_task(scrape_for_product, product_id)
         return {"status": "success", "store_name": store['name']}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

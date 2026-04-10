@@ -11,7 +11,12 @@ import numpy as np
 import cv2
 import easyocr
 from playwright.async_api import async_playwright
-from playwright_stealth import stealth
+try:
+    from playwright_stealth import stealth as _stealth_fn
+    _STEALTH_AVAILABLE = callable(_stealth_fn)
+except Exception:
+    _stealth_fn = None
+    _STEALTH_AVAILABLE = False
 from datetime import datetime
 from dotenv import load_dotenv
 from pathlib import Path
@@ -73,7 +78,11 @@ async def scrape_product_details(url: str):
         )
         
         page = await context.new_page()
-        await stealth(page)
+        if _STEALTH_AVAILABLE:
+            try:
+                await _stealth_fn(page)
+            except Exception as e:
+                print(f"[stealth] skipped: {e}")
         
         try:
             await page.set_extra_http_headers({
@@ -325,13 +334,11 @@ async def scrape_specific_mapping(mapping_id: int):
             # 4. Alert if price changed significantly
             our_price = float(mapping['our_product']['current_price']) if mapping['our_product'].get('current_price') else 0
             if our_price > details['price']:
-                from .notifier import notifier
                 notifier.send_price_alert(
-                    product_name=mapping['our_product']['name'],
-                    our_price=our_price,
-                    comp_price=details['price'],
-                    store_name="Конкурент",
-                    url=mapping['url']
+                    mapping['our_product']['name'],
+                    our_price,
+                    details['price'],
+                    mapping['url']
                 )
         return True
     except Exception as e:

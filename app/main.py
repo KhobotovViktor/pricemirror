@@ -33,17 +33,20 @@ except ImportError:
     PISA_AVAILABLE = False
 
 try:
-    from .worker.scraper import scrape_for_product, monitor_all
+    from .worker.scraper import scrape_for_product, monitor_all, scrape_specific_mapping, scrape_our_product_price, scrape_product_details
     SCRAPER_AVAILABLE = True
     SCRAPER_MODE = "playwright"
 except ImportError:
     try:
-        from .worker.cloud_scraper import scrape_for_product, monitor_all
+        from .worker.cloud_scraper import scrape_for_product, monitor_all, scrape_specific_mapping, scrape_our_product_price, scrape_product_details
         SCRAPER_AVAILABLE = True
         SCRAPER_MODE = "cloud"
     except ImportError:
         SCRAPER_AVAILABLE = False
         SCRAPER_MODE = "none"
+        scrape_specific_mapping = None
+        scrape_our_product_price = None
+        scrape_product_details = None
 
 # Standard path resolution for Phase 9 environment variables
 env_path = Path(__file__).parent.parent / '.env'
@@ -319,7 +322,6 @@ async def add_product(
         if result.data and url and "alleyadoma.ru" in url and SCRAPER_AVAILABLE:
             # Trigger immediate scrape for our own product if URL is provided
             product_id = result.data[0]['id']
-            from .worker.scraper import scrape_our_product_price
             background_tasks.add_task(scrape_our_product_price, product_id)
             
         return result.data[0] if result.data else {"status": "ok"}
@@ -332,7 +334,6 @@ async def preview_price(url: str, user_id: str = Depends(get_current_user)):
     if not user_id:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
     try:
-        from .worker.scraper import scrape_product_details
         details = await scrape_product_details(url)
         return details
     except Exception as e:
@@ -471,7 +472,6 @@ async def trigger_mapping_scrape(mapping_id: int, background_tasks: BackgroundTa
     if not SCRAPER_AVAILABLE:
         return JSONResponse(status_code=501, content={"status": "error", "message": "⚠️ Скрапинг недоступен на Vercel. Пожалуйста, запустите воркер в локальной среде."})
 
-    from .worker.scraper import scrape_specific_mapping
     background_tasks.add_task(scrape_specific_mapping, mapping_id)
     return {"status": "accepted", "message": "Обновление цены по ссылке запущено"}
 
@@ -483,7 +483,6 @@ async def trigger_our_product_scrape(product_id: int, background_tasks: Backgrou
     if not SCRAPER_AVAILABLE:
         return JSONResponse(status_code=501, content={"status": "error", "message": "⚠️ Обновление цен требует локального скрапера."})
 
-    from .worker.scraper import scrape_our_product_price
     background_tasks.add_task(scrape_our_product_price, product_id)
     return {"status": "accepted", "message": "Обновление вашей цены запущено"}
 
@@ -499,8 +498,6 @@ async def trigger_batch_scrape(data: dict, background_tasks: BackgroundTasks, us
     if not mapping_ids:
         return {"status": "error", "message": "Список ID пуст"}
 
-    from .worker.scraper import scrape_specific_mapping
-    
     async def process_batch(ids):
         for mid in ids:
             try:

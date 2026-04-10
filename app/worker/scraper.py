@@ -96,7 +96,7 @@ async def scrape_product_details(url: str):
             # Use 'load' for all sites — networkidle hangs on pages with
             # continuous background requests (analytics, ads, chat widgets)
             response = await page.goto(url, wait_until="load", timeout=60000)
-            wait_time = 4 if domain in ("hoff.ru", "divan.ru") else 2
+            wait_time = 2
             await asyncio.sleep(wait_time)
             
             # Prevent scraping a captcha or forbidden page
@@ -109,44 +109,14 @@ async def scrape_product_details(url: str):
             price = None
             image_url = None
             
-            # Debug: log what Playwright sees
             page_title = await page.title()
-            page_url = page.url
-            print(f"[{domain}] Page loaded — title: '{page_title}', url: {page_url}")
-            
-            # Check for bot protection in page content
+            print(f"[{domain}] Loaded: '{page_title[:60]}'")
+
+            # Check for bot protection
             page_text = await page.evaluate("() => document.body.innerText")
-            if "403 Error" in page_text or "Доступ к сайту" in page_text and "запрещен" in page_text:
-                print(f"[{domain}] Detected Bot Protection via page content (403 Error), aborting scrape.")
+            if "403 Error" in page_text or ("Доступ к сайту" in page_text and "запрещен" in page_text):
+                print(f"[{domain}] Bot protection detected, aborting.")
                 return {'price': None, 'image_url': None}
-            
-            # Debug: save screenshot for hoff.ru
-            if domain == "hoff.ru":
-                try:
-                    debug_path = os.path.join(os.path.dirname(__file__), '..', '..', 'debug_hoff.png')
-                    await page.screenshot(path=debug_path, full_page=False)
-                    print(f"[{domain}] Debug screenshot saved to {debug_path}")
-                    
-                    # Debug: check what DOM elements exist
-                    debug_info = await page.evaluate('''() => {
-                        const results = [];
-                        // Check all price-related elements
-                        const priceSels = ['meta[itemprop="price"]', '[itemprop="price"]', '.price-current', '[data-testid*="price"]', '[class*="price"]'];
-                        for (const sel of priceSels) {
-                            const els = document.querySelectorAll(sel);
-                            els.forEach(el => {
-                                const txt = el.innerText?.trim() || el.content || el.getAttribute('content') || '';
-                                if (txt.length < 50) {
-                                    results.push({sel, tag: el.tagName, cls: (typeof el.className === 'string' ? el.className.substring(0,80) : ''), txt});
-                                }
-                            });
-                        }
-                        return results;
-                    }''')
-                    for item in debug_info:
-                        print(f"  [DOM] sel={item['sel']}, tag={item['tag']}, class={item.get('cls','')}, text='{item['txt']}'")
-                except Exception as e:
-                    print(f"[{domain}] Debug error: {e}")
             
             print(f"[{domain}] Checking selectors...")
             
@@ -222,16 +192,17 @@ async def scrape_product_details(url: str):
             if not price:
                 reader = get_ocr_reader()
                 if reader:
-                    print(f"[{domain}] Selectors failed, trying OCR fallback...")
+                    print(f"[{domain}] Trying OCR fallback...")
                     screenshot_bytes = await page.screenshot(full_page=False)
                     nparr = np.frombuffer(screenshot_bytes, np.uint8)
                     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     results = reader.readtext(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
-                    prices = [int(re.search(r'(\d{3,})', res[1].replace(" ","")).group(1)) 
+                    prices = [int(re.search(r'(\d{3,})', res[1].replace(" ","")).group(1))
                               for res in results if re.search(r'(\d{3,})', res[1].replace(" ",""))]
-                    if prices: 
-                        price = min([p for p in prices if p > 500])
-                        print(f"[{domain}] Found price via OCR: {price}")
+                    valid = [p for p in prices if p > 500]
+                    if valid:
+                        price = min(valid)
+                        print(f"[{domain}] OCR price: {price}")
 
             if not price:
                 print(f"[{domain}] Failed to find price on {url}")
@@ -271,38 +242,11 @@ async def scrape_for_product(product_id: int):
             # Refresh local object for comparison
             our_prod.update(update_data)
 
-    # 2. Sync Competitors
+    # 2. Sync Competitors — in parallel
     resp = supabase.table("competitor_product").select("*").eq("our_product_id", product_id).execute()
-    
-    for cm in resp.data:
-        details = await scrape_product_details(cm['url'])
-        
-        # Update competitor image if found
-        if details['image_url']:
-            supabase.table("competitor_product").update({"image_url": details['image_url']}).eq("id", cm['id']).execute()
-            # If our product STILL has no image, use the first competitor image found as placeholder
-            if not our_prod.get('image_url'):
-                supabase.table("our_product").update({"image_url": details['image_url']}).eq("id", product_id).execute()
-                our_prod["image_url"] = details['image_url']
+    if resp.data:
+        await asyncio.gather(*[_scrape_mapping_safe(cm, our_prod) for cm in resp.data])
 
-        # Handle price
-        if details['price']:
-            # 1. Save to history (old table)
-            supabase.table("price_record").insert({
-                "competitor_product_id": cm['id'],
-                "price": details['price'],
-                "created_at": datetime.utcnow().isoformat()
-            }).execute()
-            
-            # 2. Update fast-access price in mapping table (new behavior)
-            supabase.table("competitor_product").update({
-                "last_price": details['price'],
-                "last_scrape": datetime.utcnow().isoformat()
-            }).eq("id", cm['id']).execute()
-            
-            if our_prod.get('current_price') and details['price'] < float(our_prod['current_price']):
-                notifier.send_price_alert(our_prod['name'], our_prod['current_price'], details['price'], cm['url'])
-                
     return True
 
 async def scrape_specific_mapping(mapping_id: int):
@@ -373,9 +317,39 @@ async def scrape_our_product_price(product_id: int):
         print(f"[Our Product] Error scraping product {product_id}: {e}")
         return False
 
+# Limit concurrent browser instances to avoid overload / rate limiting
+_SCRAPE_SEMAPHORE = asyncio.Semaphore(2)
+
+async def _scrape_mapping_safe(cm: dict, our_prod: dict):
+    """Scrape a single competitor mapping with semaphore guard."""
+    async with _SCRAPE_SEMAPHORE:
+        details = await scrape_product_details(cm['url'])
+
+    if details['image_url']:
+        supabase.table("competitor_product").update({"image_url": details['image_url']}).eq("id", cm['id']).execute()
+        if not our_prod.get('image_url'):
+            supabase.table("our_product").update({"image_url": details['image_url']}).eq("id", our_prod['id']).execute()
+            our_prod["image_url"] = details['image_url']
+
+    if details['price']:
+        supabase.table("price_record").insert({
+            "competitor_product_id": cm['id'],
+            "price": details['price'],
+            "created_at": datetime.utcnow().isoformat()
+        }).execute()
+        supabase.table("competitor_product").update({
+            "last_price": details['price'],
+            "last_scrape": datetime.utcnow().isoformat()
+        }).eq("id", cm['id']).execute()
+
+        if our_prod.get('current_price') and details['price'] < float(our_prod['current_price']):
+            notifier.send_price_alert(our_prod['name'], our_prod['current_price'], details['price'], cm['url'])
+
+
 async def monitor_all():
     resp = supabase.table("our_product").select("id").execute()
-    for p in resp.data: await scrape_for_product(p['id'])
+    # Scrape all products in parallel (semaphore limits concurrency)
+    await asyncio.gather(*[scrape_for_product(p['id']) for p in resp.data])
 
 if __name__ == "__main__":
     asyncio.run(monitor_all())

@@ -106,6 +106,9 @@ def _extract_price_from_html(html: str, url: str) -> tuple[int | None, str]:
         "divan.ru":      [r'"price"\s*:\s*(\d{3,7})', r'data-price=["\'](\d+)["\']'],
         "shatura.com":   [r'"price"\s*:\s*(\d{3,7})'],
         "alleyadoma.ru": [r'"price"\s*:\s*(\d{3,7})'],
+        "nonton.ru":     [r'"price"\s*:\s*(\d{3,7})', r'data-price=["\'](\d+)["\']',
+                          r'product-item-detail-price-value[^>]*>[\s₽]*(\d[\d\s]{2,})',
+                          r'"PRICE"\s*:\s*(\d{3,7})', r'"MIN_PRICE"\s*:\s*(\d{3,7})'],
     }
     for pat in patterns.get(domain, [r'"price"\s*:\s*(\d{3,7})']):
         m = re.search(pat, html)

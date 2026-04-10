@@ -62,6 +62,24 @@ STORE_SELECTORS = {
     "alleyadoma.ru": {
         "price": [".actual-cost-inside .fs-32.font-weight-700.manrope", ".actual-cost-inside", "meta[itemprop='price']", ".product-price"],
         "image": [".unit-slider-top-inside-tovar.slick-current", "a.unit-slider-top-inside-tovar", ".main-image"]
+    },
+    "nonton.ru": {
+        "price": [
+            "meta[itemprop='price']",
+            "[itemprop='price']",
+            ".product-item-detail-price-value",
+            ".price-new",
+            ".current-price",
+            ".catalog-element-offer-price",
+            ".item-price-current",
+            "[data-entity='price']",
+            ".product-price",
+        ],
+        "image": [
+            ".product-slider__main img",
+            ".product-image img",
+            ".detail-gallery img",
+        ]
     }
 }
 

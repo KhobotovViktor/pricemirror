@@ -118,8 +118,21 @@ async def scrape_product_details(url: str):
             if domain in NEEDS_WARMUP:
                 try:
                     await page.goto(origin + "/", wait_until="load", timeout=30000)
-                    await asyncio.sleep(1)
-                    print(f"[{domain}] Session warmed via homepage")
+                    await asyncio.sleep(2)
+                    # After warmup, set Referer to simulate organic navigation
+                    await page.set_extra_http_headers({
+                        "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                        "Referer": origin + "/",
+                    })
+                    # Navigate to category page (one level up) before product
+                    parts = url.split("?")[0].rstrip("/").split("/")
+                    if len(parts) >= 2:
+                        category_url = "/".join(parts[:-1]) + "/"
+                        await page.goto(category_url, wait_until="load", timeout=30000)
+                        await asyncio.sleep(1)
+                        await page.set_extra_http_headers({"Referer": category_url})
+                    print(f"[{domain}] Session warmed via homepage + category")
                 except Exception as e:
                     print(f"[{domain}] Warmup failed (non-fatal): {e}")
 
@@ -133,13 +146,16 @@ async def scrape_product_details(url: str):
             if response and response.status in (403, 404, 429, 500, 502, 503):
                 print(f"[{domain}] HTTP Error {response.status}, aborting scrape.")
                 return {'price': None, 'image_url': None}
-                
+
             selectors = STORE_SELECTORS.get(domain, {"price": [], "image": []})
-            
+
             price = None
             image_url = None
-            
-            page_title = await page.title()
+
+            try:
+                page_title = await page.title()
+            except Exception:
+                page_title = "unknown"
             print(f"[{domain}] Loaded: '{page_title[:60]}'")
 
             # Check for bot protection

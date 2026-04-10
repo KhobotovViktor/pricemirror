@@ -43,6 +43,45 @@ HTTP_HEADERS = {
 }
 
 
+def _extract_image_from_html(html: str, url: str) -> str | None:
+    """Extract product image URL from raw HTML via og:image or JSON-LD."""
+    # 1. og:image meta tag
+    m = re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html)
+    if not m:
+        m = re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']', html)
+    if m:
+        return urllib.parse.urljoin(url, m.group(1))
+
+    # 2. JSON-LD image field
+    for block in re.findall(
+        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+        html, re.DOTALL
+    ):
+        try:
+            data = json.loads(block)
+            if isinstance(data, list):
+                data = data[0]
+            if isinstance(data, dict):
+                img = data.get("image")
+                if isinstance(img, list):
+                    img = img[0]
+                if isinstance(img, dict):
+                    img = img.get("url") or img.get("contentUrl")
+                if img and isinstance(img, str):
+                    return urllib.parse.urljoin(url, img)
+        except Exception:
+            continue
+
+    # 3. itemprop="image"
+    m = re.search(r'itemprop=["\']image["\'][^>]*(?:content|src)=["\']([^"\']+)["\']', html)
+    if not m:
+        m = re.search(r'(?:content|src)=["\']([^"\']+)["\'][^>]*itemprop=["\']image["\']', html)
+    if m:
+        return urllib.parse.urljoin(url, m.group(1))
+
+    return None
+
+
 def _extract_price_from_html(html: str, url: str) -> tuple[int | None, str]:
     """
     Extract price from raw HTML. Returns (price, method) or (None, reason).
@@ -157,12 +196,15 @@ async def _scrape_via_httpx(url: str) -> dict:
             print(f"[Cloud/httpx] HTTP {resp.status_code} for {url} ({len(html)} bytes)")
 
         price, method = _extract_price_from_html(html, url)
+        image_url = _extract_image_from_html(html, url)
         if price:
             print(f"[Cloud/httpx] Price {price} via '{method}'")
         else:
             snippet = html[:300].replace('\n', ' ')
             print(f"[Cloud/httpx] No price (method='{method}'). Snippet: {snippet}")
-        return {"price": price, "image_url": None, "_method": method, "_http_status": resp.status_code}
+        if image_url:
+            print(f"[Cloud/httpx] Image: {image_url}")
+        return {"price": price, "image_url": image_url, "_method": method, "_http_status": resp.status_code}
     except Exception as e:
         print(f"[Cloud/httpx] Error fetching {url}: {e}")
         return {"price": None, "image_url": None, "_method": f"error:{e}"}

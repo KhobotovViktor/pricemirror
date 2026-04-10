@@ -61,7 +61,12 @@ STORE_SELECTORS = {
     },
     "alleyadoma.ru": {
         "price": [".actual-cost-inside .fs-32.font-weight-700.manrope", ".actual-cost-inside", "meta[itemprop='price']", ".product-price"],
-        "image": [".unit-slider-top-inside-tovar.slick-current", "a.unit-slider-top-inside-tovar", ".main-image"]
+        "image": [
+            ".unit-slider-top-inside-tovar.slick-current img",
+            ".unit-slider-top-inside-tovar img",
+            ".main-image img",
+            "img[itemprop='image']",
+        ]
     },
     "nonton.ru": {
         "price": [
@@ -193,11 +198,38 @@ async def scrape_product_details(url: str):
                 try:
                     el = await page.wait_for_selector(s, timeout=3000)
                     if el:
-                        src = await el.get_attribute("src")
+                        tag = await el.evaluate('e => e.tagName.toLowerCase()')
+                        if tag == 'img':
+                            src = await el.get_attribute("src") or await el.get_attribute("data-src")
+                        else:
+                            # Container element — find img inside it
+                            src = await el.evaluate(
+                                'e => { const img = e.querySelector("img"); return img ? (img.src || img.dataset.src || null) : null; }'
+                            )
                         if src:
                             image_url = urllib.parse.urljoin(url, src)
+                            print(f"[{domain}] Found image via selector '{s}'")
                             break
-                except Exception: continue
+                except Exception:
+                    continue
+
+            # 2b. Image JS fallback — og:image (universal, works on every e-commerce site)
+            if not image_url:
+                try:
+                    og_image = await page.evaluate('''() => {
+                        const og = document.querySelector('meta[property="og:image"]');
+                        if (og && og.content) return og.content;
+                        const twimg = document.querySelector('meta[name="twitter:image"]');
+                        if (twimg && twimg.content) return twimg.content;
+                        const itemprop = document.querySelector('img[itemprop="image"]');
+                        if (itemprop && itemprop.src) return itemprop.src;
+                        return null;
+                    }''')
+                    if og_image:
+                        image_url = urllib.parse.urljoin(url, og_image)
+                        print(f"[{domain}] Found image via og:image fallback")
+                except Exception as e:
+                    print(f"[{domain}] OG image fallback error: {e}")
             
             # 3. JavaScript price extraction fallback (for SPA sites)
             if not price:
@@ -294,7 +326,7 @@ async def scrape_for_product(product_id: int):
             update_data["current_price"] = our_details['price']
             print(f"Updated OUR price: {our_details['price']}")
         
-        if our_details['image_url'] and not our_prod.get('image_url'):
+        if our_details['image_url']:
             update_data["image_url"] = our_details['image_url']
             print(f"Updated OUR image: {our_details['image_url']}")
             
@@ -364,8 +396,8 @@ async def scrape_our_product_price(product_id: int):
         
         if details['price']:
             update_data = {"current_price": details['price']}
-            # 2. Update image if it's missing
-            if details['image_url'] and not product.get('image_url'):
+            # 2. Always update image if scraper found one
+            if details['image_url']:
                 update_data["image_url"] = details['image_url']
             
             supabase.table("our_product").update(update_data).eq("id", product_id).execute()
@@ -388,6 +420,7 @@ async def _scrape_mapping_safe(cm: dict, our_prod: dict):
 
     if details['image_url']:
         supabase.table("competitor_product").update({"image_url": details['image_url']}).eq("id", cm['id']).execute()
+        # Also fill our product image if it's missing
         if not our_prod.get('image_url'):
             supabase.table("our_product").update({"image_url": details['image_url']}).eq("id", our_prod['id']).execute()
             our_prod["image_url"] = details['image_url']

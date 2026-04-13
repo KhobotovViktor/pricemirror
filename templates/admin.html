@@ -271,7 +271,7 @@
                     <header style="display: flex; justify-content: space-between; align-items: end; margin-bottom: 2.5rem;">
                         <div>
                             <h1 style="font-size: 2.25rem; font-weight: 800;">Аналитика</h1>
-                            <p style="color: var(--text-muted); font-size: 1.1rem;">Глобальная статистика рынка</p>
+                            <p style="color: var(--text-muted); font-size: 1.1rem;">Комплексный анализ рынка и цен</p>
                         </div>
                         <div style="display: flex; gap: 0.75rem;">
                             <a href="/api/export" class="secondary" style="text-decoration: none; padding: 0.75rem 1.25rem; border-radius: var(--radius-md); font-weight: 600; font-size: 0.875rem; border: 1px solid var(--border-soft); display: inline-flex; align-items: center; gap: 0.5rem;">
@@ -283,6 +283,7 @@
                         </div>
                     </header>
 
+                    <!-- Summary Cards -->
                     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem;">
                         <div class="glass-card" style="margin-bottom: 0; padding: 1.5rem;">
                             <div style="color: var(--text-muted); font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">Всего товаров</div>
@@ -302,13 +303,116 @@
                         </div>
                     </div>
 
-                    <div class="glass-card">
-                        <h2 style="margin-bottom: 2rem; display: flex; align-items: center; gap: 0.75rem;">
-                            <i class="fa-solid fa-chart-area" style="color: var(--primary);"></i>
-                            Динамика цен рынка
-                        </h2>
-                        <div style="height: 400px; position: relative;">
-                            <canvas id="globalTrendChart"></canvas>
+                    <!-- Report Tabs -->
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                        <button onclick="switchReportTab('avg-price')" class="report-tab active" id="tab-avg-price" style="padding: 0.6rem 1.2rem; border-radius: var(--radius-md); font-weight: 600; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-soft); background: var(--primary); color: white;">
+                            <i class="fa-solid fa-chart-bar"></i> Средняя цена группы
+                        </button>
+                        <button onclick="switchReportTab('heatmap')" class="report-tab" id="tab-heatmap" style="padding: 0.6rem 1.2rem; border-radius: var(--radius-md); font-weight: 600; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-soft); background: var(--glass-bg); color: var(--text-main);">
+                            <i class="fa-solid fa-table-cells"></i> Heatmap разрывов
+                        </button>
+                        <button onclick="switchReportTab('trend')" class="report-tab" id="tab-trend" style="padding: 0.6rem 1.2rem; border-radius: var(--radius-md); font-weight: 600; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-soft); background: var(--glass-bg); color: var(--text-main);">
+                            <i class="fa-solid fa-chart-line"></i> Динамика цен
+                        </button>
+                        <button onclick="switchReportTab('risk')" class="report-tab" id="tab-risk" style="padding: 0.6rem 1.2rem; border-radius: var(--radius-md); font-weight: 600; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-soft); background: var(--glass-bg); color: var(--text-main);">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Зона риска
+                        </button>
+                        <button onclick="switchReportTab('coverage')" class="report-tab" id="tab-coverage" style="padding: 0.6rem 1.2rem; border-radius: var(--radius-md); font-weight: 600; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-soft); background: var(--glass-bg); color: var(--text-main);">
+                            <i class="fa-solid fa-chart-pie"></i> Покрытие мониторинга
+                        </button>
+                    </div>
+
+                    <!-- Report 1: Average Price by Category -->
+                    <div id="report-avg-price" class="report-panel">
+                        <div class="glass-card">
+                            <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+                                <i class="fa-solid fa-chart-bar" style="color: var(--primary);"></i>
+                                Средняя цена группы товаров
+                            </h2>
+                            <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: end;">
+                                <div style="flex: 1; min-width: 200px;">
+                                    <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; display: block;">Категория</label>
+                                    <select id="avgPriceCategoryFilter" onchange="renderAvgPriceReport()" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-soft); font-size: 0.875rem;">
+                                        <option value="">Все категории</option>
+                                    </select>
+                                </div>
+                                <div style="flex: 2; min-width: 300px;">
+                                    <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; display: block;">Магазины для сравнения</label>
+                                    <div id="avgPriceStoreFilter" style="display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.5rem; border: 1px solid var(--border-soft); border-radius: var(--radius-md); max-height: 100px; overflow-y: auto; background: var(--glass-bg);"></div>
+                                </div>
+                            </div>
+                            <div style="position: relative; min-height: 350px;">
+                                <canvas id="avgPriceChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Report 2: Heatmap -->
+                    <div id="report-heatmap" class="report-panel" style="display: none;">
+                        <div class="glass-card">
+                            <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+                                <i class="fa-solid fa-table-cells" style="color: var(--primary);"></i>
+                                Heatmap ценовых разрывов
+                            </h2>
+                            <div style="margin-bottom: 1rem;">
+                                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; display: block;">Категория</label>
+                                <select id="heatmapCategoryFilter" onchange="renderHeatmap()" style="padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-soft); font-size: 0.875rem; min-width: 250px;">
+                                    <option value="">Все категории</option>
+                                </select>
+                            </div>
+                            <div id="heatmapContainer" style="overflow-x: auto;"></div>
+                            <div style="margin-top: 1rem; display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--text-muted);">
+                                <span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#22c55e;vertical-align:middle;margin-right:4px;"></span> Мы дешевле</span>
+                                <span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#fbbf24;vertical-align:middle;margin-right:4px;"></span> Примерно равны</span>
+                                <span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#ef4444;vertical-align:middle;margin-right:4px;"></span> Мы дороже</span>
+                                <span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#e2e8f0;vertical-align:middle;margin-right:4px;"></span> Нет данных</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Report 3: Price Trend -->
+                    <div id="report-trend" class="report-panel" style="display: none;">
+                        <div class="glass-card">
+                            <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+                                <i class="fa-solid fa-chart-line" style="color: var(--primary);"></i>
+                                Динамика цен по категории (30 дней)
+                            </h2>
+                            <div style="margin-bottom: 1rem;">
+                                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; display: block;">Категория</label>
+                                <select id="trendCategoryFilter" onchange="renderTrendReport()" style="padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-soft); font-size: 0.875rem; min-width: 250px;">
+                                    <option value="">Все категории</option>
+                                </select>
+                            </div>
+                            <div style="height: 400px; position: relative;">
+                                <canvas id="trendChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Report 4: Risk Zone -->
+                    <div id="report-risk" class="report-panel" style="display: none;">
+                        <div class="glass-card">
+                            <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+                                <i class="fa-solid fa-triangle-exclamation" style="color: var(--danger);"></i>
+                                Товары в зоне риска
+                            </h2>
+                            <div id="riskTableContainer" style="overflow-x: auto;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Report 5: Coverage -->
+                    <div id="report-coverage" class="report-panel" style="display: none;">
+                        <div class="glass-card">
+                            <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+                                <i class="fa-solid fa-chart-pie" style="color: var(--primary);"></i>
+                                Покрытие мониторинга
+                            </h2>
+                            <div style="display: grid; grid-template-columns: 300px 1fr; gap: 2rem; align-items: start;">
+                                <div style="position: relative; height: 300px;">
+                                    <canvas id="coverageDonut"></canvas>
+                                </div>
+                                <div id="coverageTableContainer" style="overflow-x: auto;"></div>
+                            </div>
                         </div>
                     </div>
                 </section>

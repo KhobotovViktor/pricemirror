@@ -356,66 +356,413 @@ async function loadCompetitorProducts() {
 
 let priceChart = null;
 let globalTrendChart = null;
+let avgPriceChart = null;
+let trendChartInstance = null;
+let coverageDonutInstance = null;
+let _analyticsData = null; // cached data from /api/analytics/full
 
-async function loadGlobalTrend() {
-    const canvas = document.getElementById('globalTrendChart');
-    if (!canvas) return;
+const REPORT_COLORS = [
+    '#6366f1', '#a855f7', '#ec4899', '#f43f5e', '#f97316',
+    '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6',
+    '#8b5cf6', '#d946ef', '#f59e0b', '#10b981', '#0ea5e9',
+];
 
+function switchReportTab(tabId) {
+    document.querySelectorAll('.report-panel').forEach(p => p.style.display = 'none');
+    document.querySelectorAll('.report-tab').forEach(t => {
+        t.style.background = 'var(--glass-bg)';
+        t.style.color = 'var(--text-main)';
+    });
+    const panel = document.getElementById('report-' + tabId);
+    const tab = document.getElementById('tab-' + tabId);
+    if (panel) panel.style.display = 'block';
+    if (tab) { tab.style.background = 'var(--primary)'; tab.style.color = 'white'; }
+
+    // Render on first switch
+    if (tabId === 'avg-price') renderAvgPriceReport();
+    if (tabId === 'heatmap') renderHeatmap();
+    if (tabId === 'trend') renderTrendReport();
+    if (tabId === 'risk') renderRiskReport();
+    if (tabId === 'coverage') renderCoverageReport();
+}
+
+async function loadAnalyticsData() {
+    if (_analyticsData) return _analyticsData;
     try {
-        const response = await fetch('/api/dashboard/history');
-        if (!response.ok) return;
-        const data = await response.json();
-        
-        const ctx = canvas.getContext('2d');
-        const labels = data.map(d => new Date(d.date).toLocaleDateString());
-        const values = data.map(d => d.avg_price);
+        const resp = await fetch('/api/analytics/full');
+        if (!resp.ok) throw new Error('Failed to load analytics');
+        _analyticsData = await resp.json();
+        // Populate category filters
+        const cats = _analyticsData.categories || [];
+        ['avgPriceCategoryFilter', 'heatmapCategoryFilter', 'trendCategoryFilter'].forEach(id => {
+            const sel = document.getElementById(id);
+            if (!sel) return;
+            sel.innerHTML = '<option value="">Все категории</option>' +
+                cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        });
+        // Populate store checkboxes for Report 1
+        const storeDiv = document.getElementById('avgPriceStoreFilter');
+        if (storeDiv) {
+            const stores = _analyticsData.stores || [];
+            storeDiv.innerHTML =
+                `<label style="font-size:0.78rem;display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="our" checked onchange="renderAvgPriceReport()"> Аллея Дома</label>` +
+                stores.map(s =>
+                    `<label style="font-size:0.78rem;display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="${s.id}" checked onchange="renderAvgPriceReport()"> ${s.name}</label>`
+                ).join('');
+        }
+        return _analyticsData;
+    } catch (err) {
+        console.error('Analytics data error:', err);
+        return null;
+    }
+}
 
-        if (globalTrendChart) globalTrendChart.destroy();
+async function loadStatisticsSection() {
+    await loadAnalyticsData();
+    renderAvgPriceReport();
+}
 
-        globalTrendChart = new Chart(ctx, {
-            type: 'line',
+// ---- REPORT 1: Average Price by Category (horizontal bar) ----
+
+async function renderAvgPriceReport() {
+    const data = await loadAnalyticsData();
+    if (!data) return;
+
+    const catFilter = document.getElementById('avgPriceCategoryFilter')?.value;
+    const storeDiv = document.getElementById('avgPriceStoreFilter');
+    const selectedStores = storeDiv ?
+        Array.from(storeDiv.querySelectorAll('input:checked')).map(cb => cb.value) : [];
+
+    const includeOur = selectedStores.includes('our');
+    const storeIds = selectedStores.filter(s => s !== 'our').map(Number);
+
+    // Filter products by category
+    let products = data.products;
+    if (catFilter) products = products.filter(p => String(p.category_id) === catFilter);
+
+    // Build: { storeName: [prices] }
+    const storePrices = {};
+    if (includeOur) storePrices['Аллея Дома'] = [];
+
+    for (const s of data.stores) {
+        if (storeIds.includes(s.id)) storePrices[s.name] = [];
+    }
+
+    for (const p of products) {
+        if (includeOur && p.current_price) storePrices['Аллея Дома'].push(p.current_price);
+        for (const m of p.mappings) {
+            if (storeIds.includes(m.store_id) && m.last_price) {
+                const name = m.store_name;
+                if (!storePrices[name]) storePrices[name] = [];
+                storePrices[name].push(m.last_price);
+            }
+        }
+    }
+
+    const labels = [];
+    const values = [];
+    const colors = [];
+    let ci = 0;
+    for (const [name, prices] of Object.entries(storePrices)) {
+        if (prices.length === 0) continue;
+        labels.push(name);
+        values.push(Math.round(prices.reduce((a, b) => a + b, 0) / prices.length));
+        colors.push(name === 'Аллея Дома' ? '#6366f1' : REPORT_COLORS[(ci++) % REPORT_COLORS.length]);
+    }
+
+    const canvas = document.getElementById('avgPriceChart');
+    if (!canvas) return;
+    if (avgPriceChart) avgPriceChart.destroy();
+
+    avgPriceChart = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Средняя цена (₽)',
+                data: values,
+                backgroundColor: colors.map(c => c + 'cc'),
+                borderColor: colors,
+                borderWidth: 2,
+                borderRadius: 6,
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { backgroundColor: '#1e293b', padding: 12, cornerRadius: 8 }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#64748b', font: { weight: '600' }, callback: v => v.toLocaleString() + ' ₽' },
+                    grid: { color: '#f1f5f9' }
+                },
+                y: {
+                    ticks: { color: '#334155', font: { weight: '700', size: 13 } },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+}
+
+// ---- REPORT 2: Heatmap ----
+
+async function renderHeatmap() {
+    const data = await loadAnalyticsData();
+    if (!data) return;
+
+    const catFilter = document.getElementById('heatmapCategoryFilter')?.value;
+    let products = data.products.filter(p => p.current_price && p.has_price);
+    if (catFilter) products = products.filter(p => String(p.category_id) === catFilter);
+
+    // Collect all store IDs that have mappings
+    const storeSet = new Set();
+    for (const p of products) for (const m of p.mappings) if (m.last_price) storeSet.add(m.store_id);
+    const storeIds = [...storeSet];
+    const storeNames = {};
+    for (const s of data.stores) storeNames[s.id] = s.name;
+
+    if (products.length === 0 || storeIds.length === 0) {
+        document.getElementById('heatmapContainer').innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:2rem;">Нет данных для отображения</p>';
+        return;
+    }
+
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:0.8rem;">';
+    html += '<thead><tr><th style="text-align:left;padding:0.5rem;border-bottom:2px solid var(--border-soft);min-width:200px;">Товар</th>';
+    for (const sid of storeIds) {
+        html += `<th style="padding:0.5rem;border-bottom:2px solid var(--border-soft);text-align:center;min-width:100px;font-size:0.75rem;">${storeNames[sid] || sid}</th>`;
+    }
+    html += '</tr></thead><tbody>';
+
+    for (const p of products) {
+        html += `<tr><td style="padding:0.5rem 0.5rem;border-bottom:1px solid var(--border-soft);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:250px;" title="${p.name}">${p.name}</td>`;
+        for (const sid of storeIds) {
+            const m = p.mappings.find(m => m.store_id === sid && m.last_price);
+            if (!m) {
+                html += '<td style="padding:0.4rem;text-align:center;border-bottom:1px solid var(--border-soft);background:#f1f5f9;color:#94a3b8;">—</td>';
+            } else {
+                const diff = ((p.current_price - m.last_price) / p.current_price * 100);
+                let bg, color;
+                if (diff > 3) { bg = '#fef2f2'; color = '#dc2626'; }      // we are more expensive
+                else if (diff < -3) { bg = '#f0fdf4'; color = '#16a34a'; } // we are cheaper
+                else { bg = '#fffbeb'; color = '#d97706'; }                // roughly equal
+                html += `<td style="padding:0.4rem;text-align:center;border-bottom:1px solid var(--border-soft);background:${bg};color:${color};font-weight:700;">${diff > 0 ? '+' : ''}${diff.toFixed(1)}%</td>`;
+            }
+        }
+        html += '</tr>';
+    }
+    html += '</tbody></table>';
+    document.getElementById('heatmapContainer').innerHTML = html;
+}
+
+// ---- REPORT 3: Price Trend by Category ----
+
+async function renderTrendReport() {
+    const data = await loadAnalyticsData();
+    if (!data) return;
+
+    const catFilter = document.getElementById('trendCategoryFilter')?.value;
+
+    // Get product IDs in this category
+    let productIds = null;
+    if (catFilter) {
+        productIds = new Set(data.products.filter(p => String(p.category_id) === catFilter).map(p => p.id));
+    }
+
+    // Build datasets from trend data, filtered by category products
+    // trend: { storeId: { store_name, data: { date: avg_price } } }
+    const datasets = [];
+    let allDates = new Set();
+    let ci = 0;
+
+    // Add "our" average trend
+    if (data.products.length > 0) {
+        const ourByDay = {};
+        for (const p of data.products) {
+            if (productIds && !productIds.has(p.id)) continue;
+            if (!p.current_price) continue;
+            // We don't have daily our-price history, so show as flat line
+        }
+    }
+
+    for (const [sid, sdata] of Object.entries(data.trend)) {
+        // If filtering by category, we need to check if this store has products in category
+        // Since trend is aggregated across all products per store, we show all stores
+        // (the /api/analytics/full already provides store-level daily data)
+        const dates = Object.keys(sdata.data);
+        dates.forEach(d => allDates.add(d));
+
+        const color = REPORT_COLORS[ci % REPORT_COLORS.length];
+        datasets.push({
+            label: sdata.store_name,
+            data: dates.map(d => ({ x: d, y: sdata.data[d] })),
+            borderColor: color,
+            backgroundColor: color + '15',
+            fill: false,
+            tension: 0.3,
+            pointRadius: 3,
+            pointBorderWidth: 2,
+            pointBackgroundColor: '#fff',
+            pointBorderColor: color,
+        });
+        ci++;
+    }
+
+    allDates = [...allDates].sort();
+
+    const canvas = document.getElementById('trendChart');
+    if (!canvas) return;
+    if (trendChartInstance) trendChartInstance.destroy();
+
+    trendChartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: allDates.map(d => new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })),
+            datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { size: 12, weight: '600' } } },
+                tooltip: { backgroundColor: '#1e293b', padding: 12, cornerRadius: 8, mode: 'index', intersect: false }
+            },
+            scales: {
+                y: { ticks: { color: '#64748b', font: { weight: '600' }, callback: v => v.toLocaleString() + ' ₽' }, grid: { color: '#f1f5f9' } },
+                x: { ticks: { color: '#64748b', font: { weight: '600' } }, grid: { display: false } }
+            }
+        }
+    });
+}
+
+// ---- REPORT 4: Risk Zone ----
+
+async function renderRiskReport() {
+    const data = await loadAnalyticsData();
+    if (!data) return;
+
+    const riskProducts = data.products
+        .filter(p => p.current_price && p.min_comp_price && p.current_price > p.min_comp_price)
+        .map(p => ({
+            ...p,
+            gap: Math.round(p.current_price - p.min_comp_price),
+            gapPct: ((p.current_price - p.min_comp_price) / p.current_price * 100).toFixed(1),
+            recommended: Math.round(p.min_comp_price * 0.99),
+            cheapestStore: (p.mappings.find(m => m.last_price === p.min_comp_price) || {}).store_name || '—',
+        }))
+        .sort((a, b) => b.gap - a.gap);
+
+    if (riskProducts.length === 0) {
+        document.getElementById('riskTableContainer').innerHTML = '<p style="color:var(--success);text-align:center;padding:2rem;font-weight:600;">Все цены конкурентоспособны</p>';
+        return;
+    }
+
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+    html += '<thead><tr style="border-bottom:2px solid var(--border-soft);">';
+    html += '<th style="text-align:left;padding:0.7rem;">Товар</th>';
+    html += '<th style="text-align:right;padding:0.7rem;">Наша цена</th>';
+    html += '<th style="text-align:right;padding:0.7rem;">Мин. конкурента</th>';
+    html += '<th style="text-align:left;padding:0.7rem;">Магазин</th>';
+    html += '<th style="text-align:right;padding:0.7rem;">Разрыв</th>';
+    html += '<th style="text-align:right;padding:0.7rem;">%</th>';
+    html += '<th style="text-align:right;padding:0.7rem;">Рекоменд.</th>';
+    html += '</tr></thead><tbody>';
+
+    for (const p of riskProducts) {
+        html += '<tr style="border-bottom:1px solid var(--border-soft);">';
+        html += `<td style="padding:0.6rem;font-weight:600;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${p.name}">${p.name}</td>`;
+        html += `<td style="padding:0.6rem;text-align:right;font-weight:700;">${p.current_price.toLocaleString()} ₽</td>`;
+        html += `<td style="padding:0.6rem;text-align:right;color:var(--success);font-weight:700;">${p.min_comp_price.toLocaleString()} ₽</td>`;
+        html += `<td style="padding:0.6rem;font-size:0.8rem;">${p.cheapestStore}</td>`;
+        html += `<td style="padding:0.6rem;text-align:right;color:var(--danger);font-weight:700;">+${p.gap.toLocaleString()} ₽</td>`;
+        html += `<td style="padding:0.6rem;text-align:right;color:var(--danger);font-weight:700;">+${p.gapPct}%</td>`;
+        html += `<td style="padding:0.6rem;text-align:right;color:var(--primary);font-weight:700;">${p.recommended.toLocaleString()} ₽</td>`;
+        html += '</tr>';
+    }
+    html += '</tbody></table>';
+    document.getElementById('riskTableContainer').innerHTML = html;
+}
+
+// ---- REPORT 5: Coverage ----
+
+async function renderCoverageReport() {
+    const data = await loadAnalyticsData();
+    if (!data) return;
+
+    const total = data.products.length;
+    const withMapping = data.products.filter(p => p.has_mapping).length;
+    const withPrice = data.products.filter(p => p.has_price).length;
+    const stale = data.products.filter(p => p.is_stale).length;
+    const noMapping = total - withMapping;
+
+    // Donut chart
+    const canvas = document.getElementById('coverageDonut');
+    if (canvas) {
+        if (coverageDonutInstance) coverageDonutInstance.destroy();
+        coverageDonutInstance = new Chart(canvas.getContext('2d'), {
+            type: 'doughnut',
             data: {
-                labels: labels,
+                labels: ['С актуальной ценой', 'Устаревшие данные', 'Без привязки'],
                 datasets: [{
-                    label: 'Ср. цена рынка (₽)',
-                    data: values,
-                    borderColor: '#6366f1',
-                    backgroundColor: 'rgba(99, 102, 241, 0.05)',
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#ffffff',
-                    pointBorderColor: '#6366f1',
-                    pointBorderWidth: 2
+                    data: [withPrice - stale, stale, noMapping],
+                    backgroundColor: ['#22c55e', '#f97316', '#e2e8f0'],
+                    borderWidth: 0,
+                    hoverOffset: 6,
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { 
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: '#1e293b',
-                        padding: 12,
-                        cornerRadius: 8,
-                        titleFont: { size: 14, weight: 'bold' }
-                    }
-                },
-                scales: {
-                    y: { 
-                        ticks: { color: '#64748b', font: { weight: '600' } }, 
-                        grid: { color: '#f1f5f9' } 
-                    },
-                    x: { 
-                        ticks: { color: '#64748b', font: { weight: '600' } }, 
-                        grid: { display: false } 
-                    }
+                cutout: '65%',
+                plugins: {
+                    legend: { position: 'bottom', labels: { usePointStyle: true, padding: 12, font: { size: 11, weight: '600' } } },
                 }
             }
         });
-    } catch (err) {
-        console.error('Trend Chart Error:', err);
     }
+
+    // Store coverage table
+    const storeCoverage = {};
+    for (const s of data.stores) storeCoverage[s.id] = { name: s.name, count: 0, withPrice: 0 };
+    for (const p of data.products) {
+        for (const m of p.mappings) {
+            if (storeCoverage[m.store_id]) {
+                storeCoverage[m.store_id].count++;
+                if (m.last_price) storeCoverage[m.store_id].withPrice++;
+            }
+        }
+    }
+
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+    html += '<thead><tr style="border-bottom:2px solid var(--border-soft);">';
+    html += '<th style="text-align:left;padding:0.7rem;">Магазин</th>';
+    html += '<th style="text-align:right;padding:0.7rem;">Привязано</th>';
+    html += '<th style="text-align:right;padding:0.7rem;">С ценой</th>';
+    html += '<th style="text-align:right;padding:0.7rem;">Покрытие</th>';
+    html += '</tr></thead><tbody>';
+
+    for (const sc of Object.values(storeCoverage).sort((a, b) => b.count - a.count)) {
+        const pct = total > 0 ? (sc.count / total * 100).toFixed(0) : 0;
+        const pctBar = `<div style="background:var(--border-soft);border-radius:4px;height:8px;width:80px;display:inline-block;vertical-align:middle;margin-left:6px;"><div style="background:var(--primary);border-radius:4px;height:100%;width:${Math.min(pct, 100)}%;"></div></div>`;
+        html += '<tr style="border-bottom:1px solid var(--border-soft);">';
+        html += `<td style="padding:0.6rem;font-weight:600;">${sc.name}</td>`;
+        html += `<td style="padding:0.6rem;text-align:right;">${sc.count}</td>`;
+        html += `<td style="padding:0.6rem;text-align:right;">${sc.withPrice}</td>`;
+        html += `<td style="padding:0.6rem;text-align:right;">${pct}% ${pctBar}</td>`;
+        html += '</tr>';
+    }
+    html += '</tbody></table>';
+    document.getElementById('coverageTableContainer').innerHTML = html;
+}
+
+// Legacy: global trend (replaced by tab-based reports but kept for loadDashboardStats)
+async function loadGlobalTrend() {
+    // Now handled by loadStatisticsSection
+    await loadStatisticsSection();
 }
 
 // --- Batch Management Logic ---

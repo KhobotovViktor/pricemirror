@@ -117,6 +117,43 @@ def _resolve_store_domain(domain: str) -> str:
             return store_domain
     return domain
 
+
+# Phone number patterns to reject as false-positive prices
+_PHONE_PATTERNS = [
+    re.compile(r'^[78]\d{10}$'),           # 7XXXXXXXXXX or 8XXXXXXXXXX (11 digits)
+    re.compile(r'^[78]00\d{7}$'),           # 8-800-XXX-XX-XX without separators
+    re.compile(r'^[78]80\d{7}$'),           # 7-800/880
+    re.compile(r'^[78]\d{9}$'),             # 10 digits starting with 7/8
+    re.compile(r'^[78]800\d{2,7}$'),        # Partial toll-free: 7800555, 78005550665
+    re.compile(r'^8800\d{2,7}$'),           # 8800XXXXX
+]
+
+
+def _is_phone_number(value: int) -> bool:
+    """Check if a numeric value looks like a Russian phone number, not a price."""
+    s = str(value)
+    # Full phone numbers (10-11 digits starting with 7 or 8)
+    if len(s) >= 10 and s[0] in ('7', '8'):
+        return True
+    # Pattern-based detection for partial numbers
+    for pat in _PHONE_PATTERNS:
+        if pat.match(s):
+            return True
+    return False
+
+
+def _validate_price(value: int, domain: str = "") -> bool:
+    """Validate that extracted number is a plausible product price."""
+    if value is None or value <= 0:
+        return False
+    if _is_phone_number(value):
+        print(f"[{domain}] Rejected phone number as price: {value}")
+        return False
+    # Furniture prices are typically 500 - 9,999,999 RUB
+    if value < 100 or value > 9_999_999:
+        return False
+    return True
+
 async def scrape_product_details(url: str):
     """Scrapes both price and image URL from a product page"""
     async with async_playwright() as p:
@@ -224,9 +261,13 @@ async def scrape_product_details(url: str):
                             text = await el.inner_text()
                         clean_text = re.sub(r'[^\d]', '', text)
                         if clean_text:
-                            price = int(clean_text)
-                            print(f"[{domain}] Found price via selector '{s}': {price}")
-                            break
+                            candidate = int(clean_text)
+                            if _validate_price(candidate, domain):
+                                price = candidate
+                                print(f"[{domain}] Found price via selector '{s}': {price}")
+                                break
+                            else:
+                                print(f"[{domain}] Selector '{s}' value {candidate} rejected by validation")
                 except Exception as e:
                     print(f"[{domain}] Selector '{s}' failed: {e}")
                     continue
@@ -314,8 +355,11 @@ async def scrape_product_details(url: str):
                         return null;
                     }''')
                     if js_price and js_price > 100:
-                        price = js_price
-                        print(f"[{domain}] Found price via JS evaluation: {price}")
+                        if _validate_price(js_price, domain):
+                            price = js_price
+                            print(f"[{domain}] Found price via JS evaluation: {price}")
+                        else:
+                            print(f"[{domain}] JS price {js_price} rejected by validation")
                 except Exception as e:
                     print(f"[{domain}] JS price extraction error: {e}")
 
@@ -330,7 +374,7 @@ async def scrape_product_details(url: str):
                     results = reader.readtext(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
                     prices = [int(re.search(r'(\d{3,})', res[1].replace(" ","")).group(1))
                               for res in results if re.search(r'(\d{3,})', res[1].replace(" ",""))]
-                    valid = [p for p in prices if p > 500]
+                    valid = [p for p in prices if _validate_price(p, domain)]
                     if valid:
                         price = min(valid)
                         print(f"[{domain}] OCR price: {price}")

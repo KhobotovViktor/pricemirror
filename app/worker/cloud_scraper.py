@@ -63,6 +63,40 @@ def _resolve_store_domain(domain: str) -> str:
     return domain
 
 
+# Phone number patterns to reject as false-positive prices
+_PHONE_PATTERNS = [
+    re.compile(r'^[78]\d{10}$'),           # 7XXXXXXXXXX or 8XXXXXXXXXX (11 digits)
+    re.compile(r'^[78]00\d{7}$'),           # 8-800-XXX-XX-XX without separators
+    re.compile(r'^[78]80\d{7}$'),           # 7-800/880
+    re.compile(r'^[78]\d{9}$'),             # 10 digits starting with 7/8
+    re.compile(r'^[78]800\d{2,7}$'),        # Partial toll-free: 7800555, 78005550665
+    re.compile(r'^8800\d{2,7}$'),           # 8800XXXXX
+]
+
+
+def _is_phone_number(value: int) -> bool:
+    """Check if a numeric value looks like a Russian phone number, not a price."""
+    s = str(value)
+    if len(s) >= 10 and s[0] in ('7', '8'):
+        return True
+    for pat in _PHONE_PATTERNS:
+        if pat.match(s):
+            return True
+    return False
+
+
+def _validate_price(value: int, domain: str = "") -> bool:
+    """Validate that extracted number is a plausible product price."""
+    if value is None or value <= 0:
+        return False
+    if _is_phone_number(value):
+        print(f"[Cloud/{domain}] Rejected phone number as price: {value}")
+        return False
+    if value < 100 or value > 9_999_999:
+        return False
+    return True
+
+
 def _extract_image_from_html(html: str, url: str) -> str | None:
     """Extract product image URL from raw HTML via og:image or JSON-LD."""
     # 1. og:image meta tag
@@ -131,11 +165,15 @@ def _extract_price_from_html(html: str, url: str) -> tuple[int | None, str]:
                     if price_val:
                         # Use float to preserve decimals, then round (avoids "3392.00" → 339200)
                         try:
-                            return int(round(float(str(price_val).replace(",", ".").replace(" ", "")))), "json-ld"
+                            candidate = int(round(float(str(price_val).replace(",", ".").replace(" ", ""))))
+                            if _validate_price(candidate):
+                                return candidate, "json-ld"
                         except ValueError:
                             cleaned = re.sub(r'[^\d]', '', str(price_val))
                             if cleaned:
-                                return int(cleaned), "json-ld"
+                                candidate = int(cleaned)
+                                if _validate_price(candidate):
+                                    return candidate, "json-ld"
         except Exception:
             continue
 
@@ -149,7 +187,9 @@ def _extract_price_from_html(html: str, url: str) -> tuple[int | None, str]:
             for key in ('"price"', '"currentPrice"', '"salePrice"', '"finalPrice"', '"priceValue"'):
                 pm = re.search(key + r'\s*:\s*(\d{3,7})', nd_str)
                 if pm:
-                    return int(pm.group(1)), "__next_data__"
+                    candidate = int(pm.group(1))
+                    if _validate_price(candidate):
+                        return candidate, "__next_data__"
         except Exception:
             pass
 
@@ -160,7 +200,9 @@ def _extract_price_from_html(html: str, url: str) -> tuple[int | None, str]:
     if m:
         cleaned = re.sub(r'[^\d]', '', m.group(1))
         if cleaned:
-            return int(cleaned), "meta-itemprop"
+            candidate = int(cleaned)
+            if _validate_price(candidate):
+                return candidate, "meta-itemprop"
 
     # 4. Store-specific patterns
     domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
@@ -178,9 +220,11 @@ def _extract_price_from_html(html: str, url: str) -> tuple[int | None, str]:
     for pat in patterns.get(domain, [r'"price"\s*:\s*(\d{3,7})']):
         m = re.search(pat, html)
         if m:
-            val = int(m.group(1))
-            if val >= 100:
-                return val, f"regex:{pat[:30]}"
+            raw = m.group(1).replace(" ", "")
+            if raw.isdigit():
+                val = int(raw)
+                if _validate_price(val, domain):
+                    return val, f"regex:{pat[:30]}"
 
     return None, "no-match"
 

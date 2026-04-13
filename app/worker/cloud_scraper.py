@@ -92,7 +92,8 @@ def _validate_price(value: int, domain: str = "") -> bool:
     if _is_phone_number(value):
         print(f"[Cloud/{domain}] Rejected phone number as price: {value}")
         return False
-    if value < 100 or value > 9_999_999:
+    # Furniture prices are typically 500 - 9,999,999 RUB
+    if value < 500 or value > 9_999_999:
         return False
     return True
 

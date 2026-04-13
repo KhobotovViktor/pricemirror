@@ -150,7 +150,7 @@ def _validate_price(value: int, domain: str = "") -> bool:
         print(f"[{domain}] Rejected phone number as price: {value}")
         return False
     # Furniture prices are typically 500 - 9,999,999 RUB
-    if value < 100 or value > 9_999_999:
+    if value < 500 or value > 9_999_999:
         return False
     return True
 

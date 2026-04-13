@@ -43,6 +43,26 @@ HTTP_HEADERS = {
 }
 
 
+# Known store base domains for regional subdomain resolution
+_KNOWN_STORE_DOMAINS = [
+    "hoff.ru", "divan.ru", "shatura.com", "angstrem-mebel.ru",
+    "alleyadoma.ru", "nonton.ru", "mnogomebeli.com", "pushe.ru",
+    "lazurit.com", "moon.ru",
+]
+
+
+def _resolve_store_domain(domain: str) -> str:
+    """Resolve regional subdomains to base store domain.
+    
+    E.g. 'vologda.shatura.com' -> 'shatura.com'
+         'vologda.angstrem-mebel.ru' -> 'angstrem-mebel.ru'
+    """
+    for store_domain in _KNOWN_STORE_DOMAINS:
+        if domain == store_domain or domain.endswith("." + store_domain):
+            return store_domain
+    return domain
+
+
 def _extract_image_from_html(html: str, url: str) -> str | None:
     """Extract product image URL from raw HTML via og:image or JSON-LD."""
     # 1. og:image meta tag
@@ -144,10 +164,12 @@ def _extract_price_from_html(html: str, url: str) -> tuple[int | None, str]:
 
     # 4. Store-specific patterns
     domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
+    domain = _resolve_store_domain(domain)
     patterns = {
         "hoff.ru":       [r'"price"\s*:\s*(\d{3,7})', r'data-price=["\'](\d+)["\']', r'"basePrice"\s*:\s*(\d{3,7})'],
         "divan.ru":      [r'"price"\s*:\s*(\d{3,7})', r'data-price=["\'](\d+)["\']'],
-        "shatura.com":   [r'"price"\s*:\s*(\d{3,7})'],
+        "shatura.com":   [r'"price"\s*:\s*"?(\d{3,7})"?', r'sidebar__price[^>]*>[\s₽]*(\d[\d\s]{2,})'],
+        "angstrem-mebel.ru": [r'"price"\s*:\s*"?(\d{3,7})"?', r'data-price=["\'](\d+)["\']'],
         "alleyadoma.ru": [r'"price"\s*:\s*(\d{3,7})'],
         "nonton.ru":     [r'"price"\s*:\s*(\d{3,7})', r'data-price=["\'](\d+)["\']',
                           r'product-item-detail-price-value[^>]*>[\s₽]*(\d[\d\s]{2,})',
@@ -244,6 +266,7 @@ async def scrape_product_details(url: str) -> dict:
     """
     # 0. Store-specific API shortcuts (bypass bot protection)
     domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
+    domain = _resolve_store_domain(domain)
     if "hoff.ru" in domain:
         result = await _try_hoff_api(url)
         if result:

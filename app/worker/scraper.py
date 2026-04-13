@@ -56,8 +56,25 @@ STORE_SELECTORS = {
         "image": ["img.product-page__photo", ".js-product-photo", ".product-main-photo img", ".main-photo img"]
     },
     "shatura.com": {
-        "price": ["div.price", ".product-price", ".current-price"],
-        "image": ["div.product-full-photo img", ".product-image img", ".main-image img"]
+        "price": [".sidebar__price", ".product-detail__price", "div.price", ".product-price", ".current-price"],
+        "image": [".sidebar__gallery img", "div.product-full-photo img", ".product-image img", ".main-image img"]
+    },
+    "angstrem-mebel.ru": {
+        "price": [
+            "meta[itemprop='price']",
+            "[itemprop='price']",
+            "[class*='price'] [class*='current']",
+            "[class*='Price'] [class*='current']",
+            "[class*='price']",
+            ".product-price",
+            "[data-price]",
+        ],
+        "image": [
+            "meta[property='og:image']",
+            ".product-image img",
+            ".product-gallery img",
+            "img[itemprop='image']",
+        ]
     },
     "alleyadoma.ru": {
         "price": [".actual-cost-inside .fs-32.font-weight-700.manrope", ".actual-cost-inside", "meta[itemprop='price']", ".product-price"],
@@ -88,6 +105,18 @@ STORE_SELECTORS = {
     }
 }
 
+
+def _resolve_store_domain(domain: str) -> str:
+    """Resolve regional subdomains to base store domain.
+    
+    E.g. 'vologda.shatura.com' -> 'shatura.com'
+         'vologda.angstrem-mebel.ru' -> 'angstrem-mebel.ru'
+    """
+    for store_domain in STORE_SELECTORS:
+        if domain == store_domain or domain.endswith("." + store_domain):
+            return store_domain
+    return domain
+
 async def scrape_product_details(url: str):
     """Scrapes both price and image URL from a product page"""
     async with async_playwright() as p:
@@ -114,12 +143,13 @@ async def scrape_product_details(url: str):
             })
             print(f"Scraping: {url}")
             
-            domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
+            raw_domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
+            domain = _resolve_store_domain(raw_domain)
             parsed = urllib.parse.urlparse(url)
             origin = f"{parsed.scheme}://{parsed.netloc}"
 
             # Sites that block direct navigation — pre-warm session via homepage
-            NEEDS_WARMUP = {"nonton.ru"}
+            NEEDS_WARMUP = {"nonton.ru", "angstrem-mebel.ru"}
             if domain in NEEDS_WARMUP:
                 try:
                     await page.goto(origin + "/", wait_until="load", timeout=30000)
@@ -148,7 +178,7 @@ async def scrape_product_details(url: str):
             await asyncio.sleep(wait_time)
 
             # Prevent scraping a captcha or forbidden page
-            if response and response.status in (403, 404, 429, 500, 502, 503):
+            if response and response.status in (401, 403, 404, 429, 500, 502, 503):
                 print(f"[{domain}] HTTP Error {response.status}, aborting scrape.")
                 return {'price': None, 'image_url': None}
 
@@ -163,11 +193,19 @@ async def scrape_product_details(url: str):
                 page_title = "unknown"
             print(f"[{domain}] Loaded: '{page_title[:60]}'")
 
-            # Check for bot protection
+            # Check for bot protection / captcha
             page_text = await page.evaluate("() => document.body.innerText")
             if "403 Error" in page_text or ("Доступ к сайту" in page_text and "запрещен" in page_text):
                 print(f"[{domain}] Bot protection detected, aborting.")
                 return {'price': None, 'image_url': None}
+            if "подозрительн" in page_text.lower():
+                print(f"[{domain}] Captcha/suspicious activity page, waiting 10s...")
+                await asyncio.sleep(10)
+                # Re-check after wait (some captchas auto-solve)
+                page_text = await page.evaluate("() => document.body.innerText")
+                if "подозрительн" in page_text.lower():
+                    print(f"[{domain}] Still captcha, aborting.")
+                    return {'price': None, 'image_url': None}
             
             print(f"[{domain}] Checking selectors...")
             

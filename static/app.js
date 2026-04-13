@@ -205,7 +205,10 @@ window.switchSection = (sectionId) => {
     localStorage.setItem('activeSection', sectionId);
 
     // Initializations for specific sections
-    if (sectionId === 'statistics') loadGlobalTrend();
+    if (sectionId === 'statistics') {
+        _analyticsData = null; // reset cache on section switch
+        loadStatisticsSection();
+    }
     if (sectionId === 'competitors') {
         loadStores();
         loadCompetitorProducts();
@@ -389,8 +392,11 @@ function switchReportTab(tabId) {
 async function loadAnalyticsData() {
     if (_analyticsData) return _analyticsData;
     try {
-        const resp = await fetch('/api/analytics/full');
-        if (!resp.ok) throw new Error('Failed to load analytics');
+        const resp = await fetch('/api/analytics/full', { credentials: 'include' });
+        if (!resp.ok) {
+            console.error('Analytics API error:', resp.status, resp.statusText);
+            return null;
+        }
         _analyticsData = await resp.json();
         // Populate category filters
         const cats = _analyticsData.categories || [];
@@ -759,12 +765,6 @@ async function renderCoverageReport() {
     document.getElementById('coverageTableContainer').innerHTML = html;
 }
 
-// Legacy: global trend (replaced by tab-based reports but kept for loadDashboardStats)
-async function loadGlobalTrend() {
-    // Now handled by loadStatisticsSection
-    await loadStatisticsSection();
-}
-
 // --- Batch Management Logic ---
 
 window.updateCompetitorBatchBar = () => {
@@ -1118,3 +1118,11 @@ window.closeAnalytics = () => {
     if (s) s.style.display = 'none';
     if (o) o.style.display = 'none';
 }
+
+// Analytics report bridges (called from onclick in admin.html)
+window.switchReportTab = switchReportTab;
+window.renderAvgPriceReport = renderAvgPriceReport;
+window.renderHeatmap = renderHeatmap;
+window.renderTrendReport = renderTrendReport;
+window.renderRiskReport = renderRiskReport;
+window.renderCoverageReport = renderCoverageReport;

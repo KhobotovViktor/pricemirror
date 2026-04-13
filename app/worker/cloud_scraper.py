@@ -45,18 +45,14 @@ HTTP_HEADERS = {
 
 # Known store base domains for regional subdomain resolution
 _KNOWN_STORE_DOMAINS = [
-    "hoff.ru", "divan.ru", "shatura.com", "angstrem-mebel.ru",
+    "hoff.ru", "divan.ru",
     "alleyadoma.ru", "nonton.ru", "mnogomebeli.com", "pushe.ru",
     "lazurit.com", "moon.ru",
 ]
 
 
 def _resolve_store_domain(domain: str) -> str:
-    """Resolve regional subdomains to base store domain.
-    
-    E.g. 'vologda.shatura.com' -> 'shatura.com'
-         'vologda.angstrem-mebel.ru' -> 'angstrem-mebel.ru'
-    """
+    """Resolve regional subdomains to base store domain."""
     for store_domain in _KNOWN_STORE_DOMAINS:
         if domain == store_domain or domain.endswith("." + store_domain):
             return store_domain
@@ -211,8 +207,6 @@ def _extract_price_from_html(html: str, url: str) -> tuple[int | None, str]:
     patterns = {
         "hoff.ru":       [r'"price"\s*:\s*(\d{3,7})', r'data-price=["\'](\d+)["\']', r'"basePrice"\s*:\s*(\d{3,7})'],
         "divan.ru":      [r'"price"\s*:\s*(\d{3,7})', r'data-price=["\'](\d+)["\']'],
-        "shatura.com":   [r'"price"\s*:\s*"?(\d{3,7})"?', r'sidebar__price[^>]*>[\s₽]*(\d[\d\s]{2,})'],
-        "angstrem-mebel.ru": [r'"price"\s*:\s*"?(\d{3,7})"?', r'data-price=["\'](\d+)["\']'],
         "alleyadoma.ru": [r'"price"\s*:\s*(\d{3,7})'],
         "nonton.ru":     [r'"price"\s*:\s*(\d{3,7})', r'data-price=["\'](\d+)["\']',
                           r'product-item-detail-price-value[^>]*>[\s₽]*(\d[\d\s]{2,})',

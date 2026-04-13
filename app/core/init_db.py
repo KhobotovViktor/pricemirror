@@ -22,8 +22,6 @@ STORES = [
     ("BestMebelShop", "bestmebelshop.ru"),
     ("NadomMebel", "nadommebel.com"),
     ("Pushe", "pushe.ru"),
-    ("Ангстрем", "angstrem-mebel.ru"),
-    ("Шатура", "shatura.com"),
     ("Мебель Соня", "mebel-sonya.ru"),
     ("Лазурит", "lazurit.com"),
     ("Нонтон", "nonton.ru"),

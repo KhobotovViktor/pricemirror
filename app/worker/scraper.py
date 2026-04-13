@@ -62,10 +62,10 @@ STORE_SELECTORS = {
     "angstrem-mebel.ru": {
         "price": [
             "meta[itemprop='price']",
+            ".pricecol meta[itemprop='price']",
+            ".pricecol .ang-price-item",
             "[itemprop='price']",
-            "[class*='price'] [class*='current']",
-            "[class*='Price'] [class*='current']",
-            "[class*='price']",
+            ".ang-price-item",
             ".product-price",
             "[data-price]",
         ],
@@ -154,8 +154,168 @@ def _validate_price(value: int, domain: str = "") -> bool:
         return False
     return True
 
+
+# Chrome path for CDP-based scraping (Qrator WAF bypass)
+_CHROME_PATHS = [
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+]
+_CHROME_USER_DATA = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), ".chrome_debug")
+
+
+async def _scrape_via_real_chrome(url: str, domain: str) -> dict | None:
+    """Scrape using real Chrome via CDP — bypasses Qrator and similar JS-challenge WAFs.
+    
+    Launches a real Chrome instance with --remote-debugging-port, connects via CDP,
+    navigates, extracts price/image, then shuts down.
+    """
+    import subprocess
+
+    chrome_path = None
+    for cp in _CHROME_PATHS:
+        if os.path.exists(cp):
+            chrome_path = cp
+            break
+    if not chrome_path:
+        print(f"[{domain}] Real Chrome not found, skipping CDP scrape")
+        return None
+
+    proc = None
+    try:
+        proc = subprocess.Popen([
+            chrome_path,
+            "--remote-debugging-port=9222",
+            f"--user-data-dir={_CHROME_USER_DATA}",
+            "--no-first-run",
+            "--disable-default-apps",
+            "--disable-extensions",
+            "--disable-sync",
+            "about:blank",
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        await asyncio.sleep(3)
+
+        async with async_playwright() as p:
+            browser = await p.chromium.connect_over_cdp("http://127.0.0.1:9222")
+            context = browser.contexts[0]
+            page = context.pages[0] if context.pages else await context.new_page()
+
+            print(f"[{domain}] CDP: navigating to {url}")
+            response = await page.goto(url, wait_until="load", timeout=60000)
+            await asyncio.sleep(5)
+
+            if response and response.status in (401, 403, 429):
+                print(f"[{domain}] CDP: HTTP {response.status}, blocked")
+                await browser.close()
+                return None
+
+            price = None
+            image_url = None
+
+            selectors = STORE_SELECTORS.get(domain, {"price": [], "image": []})
+            for s in selectors["price"]:
+                try:
+                    state = 'attached' if s.startswith('meta') else 'visible'
+                    el = await page.wait_for_selector(s, timeout=3000, state=state)
+                    if el:
+                        tag_name = await el.evaluate('e => e.tagName.toLowerCase()')
+                        if tag_name == 'meta':
+                            text = await el.get_attribute('content') or ''
+                        else:
+                            text = await el.inner_text()
+                        clean = re.sub(r'[^\d]', '', text)
+                        if clean:
+                            candidate = int(clean)
+                            if _validate_price(candidate, domain):
+                                price = candidate
+                                print(f"[{domain}] CDP: price via '{s}': {price}")
+                                break
+                except Exception:
+                    continue
+
+            for s in selectors["image"]:
+                try:
+                    el = await page.wait_for_selector(s, timeout=3000, state='attached')
+                    if el:
+                        tag = await el.evaluate('e => e.tagName.toLowerCase()')
+                        if tag == 'meta':
+                            src = await el.get_attribute('content')
+                        elif tag == 'img':
+                            src = await el.get_attribute('src') or await el.get_attribute('data-src')
+                        else:
+                            src = await el.evaluate(
+                                'e => { const img = e.querySelector("img"); return img ? (img.src || img.dataset.src) : null; }'
+                            )
+                        if src:
+                            image_url = urllib.parse.urljoin(url, src)
+                            break
+                except Exception:
+                    continue
+
+            if not price:
+                try:
+                    js_price = await page.evaluate('''() => {
+                        const meta = document.querySelector('meta[itemprop="price"]');
+                        if (meta && meta.content) {
+                            const v = parseInt(meta.content.replace(/[^0-9]/g, ''));
+                            if (v > 500) return v;
+                        }
+                        const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+                        for (const s of scripts) {
+                            try {
+                                const d = JSON.parse(s.textContent);
+                                if (d && d["@type"] === "Product" && d.offers && d.offers.price) {
+                                    const v = parseInt(String(d.offers.price).replace(/[^0-9]/g, ''));
+                                    if (v > 500) return v;
+                                }
+                            } catch(e) {}
+                        }
+                        return null;
+                    }''')
+                    if js_price and _validate_price(js_price, domain):
+                        price = js_price
+                        print(f"[{domain}] CDP: price via JS: {price}")
+                except Exception as e:
+                    print(f"[{domain}] CDP JS error: {e}")
+
+            if not image_url:
+                try:
+                    og = await page.evaluate('''() => {
+                        const m = document.querySelector('meta[property="og:image"]');
+                        return m ? m.content : null;
+                    }''')
+                    if og:
+                        image_url = urllib.parse.urljoin(url, og)
+                except Exception:
+                    pass
+
+            await browser.close()
+            print(f"[{domain}] CDP result: price={price}, image={'yes' if image_url else 'no'}")
+            return {"price": price, "image_url": image_url}
+
+    except Exception as e:
+        print(f"[{domain}] CDP scrape error: {e}")
+        return None
+    finally:
+        if proc:
+            try:
+                proc.terminate()
+            except Exception:
+                pass
+
+
 async def scrape_product_details(url: str):
     """Scrapes both price and image URL from a product page"""
+    raw_domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
+    domain = _resolve_store_domain(raw_domain)
+
+    # Sites behind Qrator/advanced WAF — use real Chrome via CDP
+    NEEDS_REAL_CHROME = {"angstrem-mebel.ru"}
+    if domain in NEEDS_REAL_CHROME:
+        result = await _scrape_via_real_chrome(url, domain)
+        if result and result.get("price"):
+            return result
+        print(f"[{domain}] Real Chrome scrape failed, falling back to Playwright")
+
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True, 
@@ -180,13 +340,11 @@ async def scrape_product_details(url: str):
             })
             print(f"Scraping: {url}")
             
-            raw_domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
-            domain = _resolve_store_domain(raw_domain)
             parsed = urllib.parse.urlparse(url)
             origin = f"{parsed.scheme}://{parsed.netloc}"
 
             # Sites that block direct navigation — pre-warm session via homepage
-            NEEDS_WARMUP = {"nonton.ru", "angstrem-mebel.ru"}
+            NEEDS_WARMUP = {"nonton.ru"}
             if domain in NEEDS_WARMUP:
                 try:
                     await page.goto(origin + "/", wait_until="load", timeout=30000)

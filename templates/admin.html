@@ -142,6 +142,13 @@
                                     </select>
                                 </div>
                                 <div class="form-group">
+                                    <label class="form-label">Поиск товара</label>
+                                    <div class="form-input-icon">
+                                        <i class="fa-solid fa-search"></i>
+                                        <input class="form-input" type="text" id="mappingProductSearch" placeholder="Начните вводить название..." oninput="filterMappingProducts()">
+                                    </div>
+                                </div>
+                                <div class="form-group">
                                     <label class="form-label">Наш товар</label>
                                     <select class="form-select" id="productSelect" name="product_id" required>
                                         {% for prod in products %}

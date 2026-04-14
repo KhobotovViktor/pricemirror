@@ -1946,13 +1946,17 @@ window.confirmXmlImport = confirmXmlImport;
 
 function filterMappingProducts() {
     const catId = document.getElementById('mappingCategoryFilter')?.value || 'all';
+    const query = (document.getElementById('mappingProductSearch')?.value || '').toLowerCase().trim();
     const sel = document.getElementById('productSelect');
     if (!sel) return;
 
     // Filter options in the hidden <select>
     Array.from(sel.options).forEach(opt => {
         const optCat = opt.getAttribute('data-category') || '';
-        const show = (catId === 'all' || optCat === catId);
+        const optName = opt.textContent.toLowerCase();
+        const matchesCat = (catId === 'all' || optCat === catId);
+        const matchesSearch = !query || optName.includes(query);
+        const show = matchesCat && matchesSearch;
         opt.style.display = show ? '' : 'none';
         opt.disabled = !show;
     });

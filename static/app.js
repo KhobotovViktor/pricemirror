@@ -868,6 +868,31 @@ async function renderCoverageReport() {
     const stale = data.products.filter(p => p.is_stale).length;
     const noMapping = total - withMapping;
 
+    // Summary cards above the table
+    const summaryDiv = document.getElementById('coverageSummary');
+    if (summaryDiv) {
+        const covPct = total > 0 ? Math.round(withPrice / total * 100) : 0;
+        summaryDiv.innerHTML = `
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:0.82rem;">
+                <div style="padding:10px 12px;background:var(--bg-surface);border-radius:var(--radius-md);border:1px solid var(--border-soft);">
+                    <div style="color:var(--text-muted);font-weight:600;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;">Наших товаров</div>
+                    <div style="font-size:1.35rem;font-weight:800;color:var(--text);margin-top:2px;">${total}</div>
+                </div>
+                <div style="padding:10px 12px;background:var(--bg-surface);border-radius:var(--radius-md);border:1px solid var(--border-soft);">
+                    <div style="color:var(--text-muted);font-weight:600;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;">С привязкой</div>
+                    <div style="font-size:1.35rem;font-weight:800;color:var(--primary);margin-top:2px;">${withMapping}</div>
+                </div>
+                <div style="padding:10px 12px;background:var(--bg-surface);border-radius:var(--radius-md);border:1px solid var(--border-soft);">
+                    <div style="color:var(--text-muted);font-weight:600;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;">С актуальной ценой</div>
+                    <div style="font-size:1.35rem;font-weight:800;color:#22c55e;margin-top:2px;">${withPrice}</div>
+                </div>
+                <div style="padding:10px 12px;background:var(--bg-surface);border-radius:var(--radius-md);border:1px solid var(--border-soft);">
+                    <div style="color:var(--text-muted);font-weight:600;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;">Покрытие</div>
+                    <div style="font-size:1.35rem;font-weight:800;color:var(--text);margin-top:2px;">${covPct}%</div>
+                </div>
+            </div>`;
+    }
+
     // Donut chart
     const canvas = document.getElementById('coverageDonut');
     if (canvas) {
@@ -911,7 +936,7 @@ async function renderCoverageReport() {
     html += '<th style="text-align:left;padding:0.7rem;">Магазин</th>';
     html += '<th style="text-align:right;padding:0.7rem;">Привязано</th>';
     html += '<th style="text-align:right;padding:0.7rem;">С ценой</th>';
-    html += '<th style="text-align:right;padding:0.7rem;">Покрытие</th>';
+    html += `<th style="text-align:right;padding:0.7rem;">Покрытие (из ${total})</th>`;
     html += '</tr></thead><tbody>';
 
     for (const sc of Object.values(storeCoverage).sort((a, b) => b.count - a.count)) {

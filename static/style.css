@@ -400,7 +400,7 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
 /* ================================================================
    FORMS
    ================================================================ */
-.form-group { margin-bottom: 20px; }
+.form-group { margin-bottom: 20px; overflow: hidden; }
 
 .form-label {
     display: block;
@@ -1138,6 +1138,7 @@ input[type="checkbox"] {
     position: relative;
     display: inline-block;
     min-width: 160px;
+    max-width: 100%;
 }
 
 .custom-dropdown-trigger {

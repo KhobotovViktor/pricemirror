@@ -173,11 +173,13 @@ function initCustomDropdowns() {
 function _buildCustomDropdown(sel) {
     const wrapper = document.createElement('div');
     wrapper.className = 'custom-dropdown';
-    if (sel.style.minWidth) wrapper.style.minWidth = sel.style.minWidth;
-    if (sel.style.cssText) {
-        // Copy inline width/min-width styles
-        const mw = sel.style.minWidth;
-        if (mw) wrapper.style.minWidth = mw;
+    // Inside a form-group or card, fill width
+    const parentGroup = sel.closest('.form-group');
+    if (parentGroup) {
+        wrapper.style.display = 'block';
+        wrapper.style.width = '100%';
+    } else if (sel.style.minWidth) {
+        wrapper.style.minWidth = sel.style.minWidth;
     }
 
     // Copy classes from parent icon wrapper if present

@@ -336,8 +336,9 @@ function refreshCustomDropdown(selectEl) {
         div.textContent = o.textContent;
         optList.appendChild(div);
     });
-    const currentOpt = selectEl.options[selectEl.selectedIndex];
-    wrapper._ddTrigger.querySelector('.dd-label').textContent = currentOpt ? currentOpt.textContent : '';
+    const currentOpt = (selectEl.selectedIndex >= 0) ? selectEl.options[selectEl.selectedIndex] : null;
+    const label = (currentOpt && !currentOpt.disabled) ? currentOpt.textContent : '';
+    wrapper._ddTrigger.querySelector('.dd-label').textContent = label;
 }
 
 // --- SPA Logic ---
@@ -1957,9 +1958,13 @@ function filterMappingProducts() {
         opt.disabled = !show;
     });
 
-    // Select first visible option
+    // Select first visible option, or clear if none
     const firstVisible = Array.from(sel.options).find(o => !o.disabled);
-    if (firstVisible) sel.value = firstVisible.value;
+    if (firstVisible) {
+        sel.value = firstVisible.value;
+    } else {
+        sel.selectedIndex = -1;
+    }
 
     // Refresh the custom dropdown
     refreshCustomDropdown(sel);

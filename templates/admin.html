@@ -9,16 +9,15 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <!-- Burger Menu Button (mobile only) -->
-    <button class="burger-btn" id="burgerBtn" onclick="toggleMobileSidebar()">
+    <!-- Burger Menu (mobile) -->
+    <button class="burger-btn" id="burgerBtn" onclick="toggleMobileSidebar()" aria-label="Menu">
         <i class="fa-solid fa-bars"></i>
     </button>
-    <!-- Sidebar Overlay (mobile only) -->
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleMobileSidebar()"></div>
 
     <div class="app-layout">
         <!-- Sidebar Navigation -->
-        <nav class="sidebar">
+        <nav class="sidebar" role="navigation" aria-label="Main navigation">
             <div class="sidebar-logo">
                 <i class="fa-solid fa-couch"></i>
                 <span>Price Mirror</span>
@@ -26,124 +25,130 @@
             
             <ul class="nav-menu">
                 <li class="nav-item">
-                    <a onclick="switchSection('our-products')" id="nav-our-products" class="nav-link active">
+                    <a onclick="switchSection('our-products')" id="nav-our-products" class="nav-link active" role="button" tabindex="0">
                         <i class="fa-solid fa-boxes-stacked"></i>
                         <span class="nav-text">Наши товары</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a onclick="switchSection('competitors')" id="nav-competitors" class="nav-link">
+                    <a onclick="switchSection('competitors')" id="nav-competitors" class="nav-link" role="button" tabindex="0">
                         <i class="fa-solid fa-users-viewfinder"></i>
                         <span class="nav-text">Конкуренты</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a onclick="switchSection('statistics')" id="nav-statistics" class="nav-link">
+                    <a onclick="switchSection('statistics')" id="nav-statistics" class="nav-link" role="button" tabindex="0">
                         <i class="fa-solid fa-chart-line"></i>
                         <span class="nav-text">Статистика</span>
                     </a>
                 </li>
                 <li class="nav-item">
-                    <a onclick="switchSection('settings')" id="nav-settings" class="nav-link">
+                    <a onclick="switchSection('settings')" id="nav-settings" class="nav-link" role="button" tabindex="0">
                         <i class="fa-solid fa-sliders"></i>
                         <span class="nav-text">Настройки</span>
                     </a>
                 </li>
             </ul>
 
-            <div style="margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border-soft);">
-                <a href="/logout" class="nav-link" style="color: var(--danger);">
+            <div class="sidebar-footer">
+                <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Тёмная тема">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+                <a href="/logout" class="nav-link text-danger">
                     <i class="fa-solid fa-arrow-right-from-bracket"></i>
                     <span class="nav-text">Выход</span>
                 </a>
             </div>
         </nav>
 
-        <!-- Main Content Area -->
+        <!-- Main Content -->
         <main class="main-content">
             <div class="container">
-                
-                <!-- SECTION: OUR PRODUCTS -->
+
+                <!-- ═══════ SECTION: OUR PRODUCTS ═══════ -->
                 <section id="section-our-products" class="content-section active">
-                    <header style="margin-bottom: 2.5rem;">
-                        <h1 style="font-size: 2.25rem; font-weight: 800; letter-spacing: -0.025em;">Наши товары</h1>
-                        <p style="color: var(--text-muted); font-size: 1.1rem;">Управление ассортиментом и сопоставление цен</p>
+                    <header class="page-header">
+                        <h1 class="page-title">Наши товары</h1>
+                        <p class="page-subtitle">Управление ассортиментом и сопоставление цен</p>
                     </header>
 
-                    <div class="grid">
-                        <div class="glass-card">
-                            <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
-                                <i class="fa-solid fa-plus-circle" style="color: var(--primary);"></i>
+                    <div class="grid-auto mb-lg">
+                        <!-- Add Product Card -->
+                        <div class="card">
+                            <h2 class="section-title">
+                                <i class="fa-solid fa-plus-circle" style="color:var(--primary)"></i>
                                 Добавить наш товар
                             </h2>
                             <form id="productForm">
                                 <div class="form-group">
-                                    <label>Название товара</label>
-                                    <input type="text" name="name" placeholder="Напр: Диван угловой 'Босс'" required>
+                                    <label class="form-label">Название товара</label>
+                                    <input class="form-input" type="text" name="name" placeholder="Напр: Диван угловой 'Босс'" required>
                                 </div>
                                 <div class="form-group">
-                                    <label>Категория</label>
-                                    <select name="category_id" required>
+                                    <label class="form-label">Категория</label>
+                                    <select class="form-select" name="category_id" required>
                                         {% for cat in categories %}
                                         <option value="{{ cat.id }}">{{ cat.name }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>URL на нашем сайте (alleyadoma.ru)</label>
-                                    <input type="url" id="productUrlInput" name="url" placeholder="https://alleyadoma.ru/catalog/..." required>
-                                    <small id="priceSyncStatus" style="font-size: 0.75rem; color: var(--primary); font-weight: 700; display: none; margin-top: 0.25rem;">
+                                    <label class="form-label">URL на нашем сайте (alleyadoma.ru)</label>
+                                    <input class="form-input" type="url" id="productUrlInput" name="url" placeholder="https://alleyadoma.ru/catalog/..." required>
+                                    <div id="priceSyncStatus" class="form-hint">
                                         <i class="fa-solid fa-sync fa-spin"></i> Получаем цену с сайта...
-                                    </small>
+                                    </div>
                                 </div>
-                                <button type="submit" style="width: 100%; justify-content: center;">
+                                <button type="submit" class="btn btn-primary w-full">
                                     <i class="fa-solid fa-save"></i> Сохранить товар
                                 </button>
                             </form>
                         </div>
 
-                        <div class="glass-card">
-                            <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
-                                <i class="fa-solid fa-link" style="color: var(--secondary);"></i>
+                        <!-- Mapping Card -->
+                        <div class="card">
+                            <h2 class="section-title">
+                                <i class="fa-solid fa-link" style="color:var(--secondary)"></i>
                                 Быстрое сопоставление
                             </h2>
                             <form id="mappingForm">
                                 <div class="form-group">
-                                    <label>Наш товар</label>
-                                    <select id="productSelect" name="product_id" required>
+                                    <label class="form-label">Наш товар</label>
+                                    <select class="form-select" id="productSelect" name="product_id" required>
                                         {% for prod in products %}
                                         <option value="{{ prod.id }}">{{ prod.name }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label>Ссылка конкурента</label>
-                                    <input type="url" name="competitor_url" placeholder="https://hoff.ru/products/..." required>
+                                    <label class="form-label">Ссылка конкурента</label>
+                                    <input class="form-input" type="url" name="competitor_url" placeholder="https://hoff.ru/products/..." required>
                                 </div>
-                                <button type="submit" style="width: 100%; justify-content: center; background: var(--secondary);">
+                                <button type="submit" class="btn btn-primary w-full" style="background:var(--secondary)">
                                     <i class="fa-solid fa-plug"></i> Связать ссылку
                                 </button>
                             </form>
-                            <div id="mappingStatus" style="margin-top: 1rem; font-size: 0.9rem;"></div>
+                            <div id="mappingStatus" class="text-sm" style="margin-top:12px"></div>
                         </div>
                     </div>
 
-                    <div class="glass-card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; gap: 1rem;">
-                            <h2 style="flex-shrink: 0;">Каталог товаров</h2>
-                            <div style="display: flex; gap: 0.75rem; flex-grow: 1; justify-content: flex-end; flex-wrap: wrap;">
-                                <div style="position: relative; width: 200px;">
-                                    <i class="fa-solid fa-layer-group" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.85rem;"></i>
-                                    <select id="categoryFilter" style="padding-left: 2.75rem; height: 48px; padding-top: 0; padding-bottom: 0;">
+                    <!-- Product Catalog -->
+                    <div class="card">
+                        <div class="filter-bar">
+                            <h2 class="flex-shrink-0" style="font-size:1.125rem;font-weight:700">Каталог товаров</h2>
+                            <div class="filter-group">
+                                <div class="form-input-icon">
+                                    <i class="fa-solid fa-layer-group"></i>
+                                    <select class="form-select" id="categoryFilter" style="min-width:180px">
                                         <option value="all">Все категории</option>
                                         {% for cat in categories %}
                                         <option value="{{ cat.id }}">{{ cat.name }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>
-                                <div style="position: relative; width: 185px;">
-                                    <i class="fa-solid fa-tag" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.85rem;"></i>
-                                    <select id="statusFilter" style="padding-left: 2.75rem; height: 48px; padding-top: 0; padding-bottom: 0;" onchange="handleProductFilter()">
+                                <div class="form-input-icon">
+                                    <i class="fa-solid fa-tag"></i>
+                                    <select class="form-select" id="statusFilter" onchange="handleProductFilter()" style="min-width:160px">
                                         <option value="all">Все статусы</option>
                                         <option value="success">Цена ниже</option>
                                         <option value="warning">Цена равна</option>
@@ -151,54 +156,54 @@
                                         <option value="neutral">Ожидание</option>
                                     </select>
                                 </div>
-                                <div style="position: relative; width: 270px;">
-                                    <i class="fa-solid fa-search" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted);"></i>
-                                    <input type="text" id="catalogSearch" placeholder="Поиск по названию..." style="padding-left: 2.75rem; height: 48px;">
+                                <div class="form-input-icon" style="min-width:240px">
+                                    <i class="fa-solid fa-search"></i>
+                                    <input class="form-input" type="text" id="catalogSearch" placeholder="Поиск по названию...">
                                 </div>
                             </div>
                         </div>
                         
-                        <div id="batchActions" style="display: none; position: sticky; top: 1rem; background: var(--primary); padding: 1rem 1.5rem; border-radius: var(--radius-lg); margin-bottom: 1.5rem; justify-content: space-between; align-items: center; z-index: 100; box-shadow: var(--shadow-lg);">
-                            <span id="selectedCount" style="color: white; font-weight: 700;">Выбрано: 0 тов.</span>
-                            <div style="display: flex; gap: 0.5rem;">
-                                <button onclick="handleBatchDelete()" style="background: white; color: var(--danger); padding: 0.5rem 1rem;">
+                        <!-- Batch Actions Bar -->
+                        <div id="batchActions" class="batch-bar">
+                            <span id="selectedCount">Выбрано: 0 тов.</span>
+                            <div class="flex gap-sm">
+                                <button onclick="handleBatchDelete()" class="btn btn-sm" style="background:white;color:var(--danger)">
                                     <i class="fa-solid fa-trash"></i> Удалить
                                 </button>
-                                <button onclick="clearSelection()" class="secondary" style="background: rgba(255,255,255,0.2); border: none; color: white;">Отмена</button>
+                                <button onclick="clearSelection()" class="btn btn-sm btn-ghost" style="color:white">Отмена</button>
                             </div>
                         </div>
 
-                        <div id="productList" style="border-top: 1px solid var(--border-soft);">
+                        <!-- Product List -->
+                        <div id="productList" style="border-top:1px solid var(--border)">
                             {% for prod in products %}
                             <div class="product-item" data-id="{{ prod.id }}" data-name="{{ prod.name | lower }}" data-category="{{ prod.category_id }}" data-status="{{ prod.price_status }}">
-                                <input type="checkbox" class="product-checkbox" onchange="updateProductBatchBar()" style="width: 18px; height: 18px; cursor: pointer; margin-right: 1rem;">
-                                <div style="width: 48px; height: 48px; border-radius: var(--radius-md); overflow: hidden; background: #f1f5f9; flex-shrink: 0; margin-right: 1rem; border: 1px solid var(--border-soft);">
+                                <input type="checkbox" class="product-checkbox" onchange="updateProductBatchBar()">
+                                <div class="product-thumb">
                                     {% if prod.image_url %}
-                                    <img src="{{ prod.image_url }}" alt="{{ prod.name }}" style="width: 100%; height: 100%; object-fit: cover;">
+                                    <img src="{{ prod.image_url }}" alt="{{ prod.name }}">
                                     {% else %}
-                                    <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; background: #f8fafc;">
-                                        <i class="fa-solid fa-box" style="opacity: 0.2;"></i>
-                                    </div>
+                                    <i class="fa-solid fa-box"></i>
                                     {% endif %}
                                 </div>
-                                <div style="flex-grow: 1;">
-                                    <div style="font-weight: 700; font-size: 1rem; color: var(--text-main);">{{ prod.name }}</div>
-                                    <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em;">
-                                        {{ prod.category.name if prod.category else 'Без категории' }} • ID: {{ prod.id }}
+                                <div class="product-info">
+                                    <div class="product-name">{{ prod.name }}</div>
+                                    <div class="product-meta">
+                                        {{ prod.category.name if prod.category else 'Без категории' }} &bull; ID: {{ prod.id }}
                                     </div>
                                 </div>
-                                <div style="text-align: right; margin-right: 1.5rem;">
-                                    <div class="price">{{ "{:,.0f}".format(prod.current_price or 0).replace(",", " ") }} ₽</div>
-                                    <div class="status-pill status-{{ prod.price_status }}">
-                                        <span class="status-dot"></span>
+                                <div class="product-price-col">
+                                    <div class="price">{{ "{:,.0f}".format(prod.current_price or 0).replace(",", " ") }} &#8381;</div>
+                                    <div class="badge badge-{{ prod.price_status }}">
+                                        <span class="badge-dot"></span>
                                         {{ 'Цена ниже' if prod.price_status == 'success' else 'Цена равна' if prod.price_status == 'warning' else 'Цена выше' if prod.price_status == 'danger' else '—' }}
                                     </div>
                                 </div>
-                                <div style="display: flex; gap: 0.5rem;">
-                                    <button data-id="{{ prod.id }}" onclick="handleAnalytics(this)" class="secondary" title="Аналитика" style="padding: 0.5rem 1rem;">
+                                <div class="product-actions">
+                                    <button data-id="{{ prod.id }}" onclick="handleAnalytics(this)" class="btn btn-secondary btn-icon sm" title="Аналитика">
                                         <i class="fa-solid fa-chart-simple"></i>
                                     </button>
-                                    <button data-id="{{ prod.id }}" data-name="{{ prod.name }}" onclick="handleDelete(this)" class="secondary" title="Удалить" style="color: var(--danger); padding: 0.5rem 1rem;">
+                                    <button data-id="{{ prod.id }}" data-name="{{ prod.name }}" onclick="handleDelete(this)" class="btn btn-secondary btn-icon sm text-danger" title="Удалить">
                                         <i class="fa-solid fa-trash-can"></i>
                                     </button>
                                 </div>
@@ -208,43 +213,41 @@
                     </div>
                 </section>
 
-                <!-- SECTION: COMPETITORS -->
+                <!-- ═══════ SECTION: COMPETITORS ═══════ -->
                 <section id="section-competitors" class="content-section">
-                    <header style="margin-bottom: 2.5rem;">
-                        <h1 style="font-size: 2.25rem; font-weight: 800;">Товары конкурентов</h1>
-                        <p style="color: var(--text-muted); font-size: 1.1rem;">Мониторинг ссылок и фильтрация по магазинам</p>
+                    <header class="page-header">
+                        <h1 class="page-title">Товары конкурентов</h1>
+                        <p class="page-subtitle">Мониторинг ссылок и фильтрация по магазинам</p>
                     </header>
                     
-                    <div class="glass-card">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; background: rgba(99, 102, 241, 0.03); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-soft);">
-                            <div style="display: flex; align-items: center; gap: 1rem;">
-                                <input type="checkbox" id="selectAllCompetitors" style="width: 1.25rem; height: 1.25rem; cursor: pointer; accent-color: var(--primary);">
-                                <h2 style="display: flex; align-items: center; gap: 0.75rem; font-size: 1.1rem; margin-bottom: 0;">
-                                    <i class="fa-solid fa-cloud-arrow-down" style="color: var(--primary);"></i>
-                                    Мониторинг ссылок
-                                </h2>
+                    <div class="card">
+                        <div class="toolbar">
+                            <div class="toolbar-title">
+                                <input type="checkbox" id="selectAllCompetitors" style="accent-color:var(--primary)">
+                                <i class="fa-solid fa-cloud-arrow-down" style="color:var(--primary)"></i>
+                                Мониторинг ссылок
                             </div>
-                            <div id="batchScrapeToolbar" style="display: none; align-items: center; gap: 1rem; animation: slideIn 0.3s ease;">
-                                <span id="selectedCountLabel" style="font-size: 0.875rem; color: var(--text-muted); font-weight: 600;">Выбрано: 0</span>
-                                <button onclick="handleBatchScrape()" class="primary" style="padding: 0.6rem 1.25rem; font-size: 0.875rem; gap: 0.5rem;">
+                            <div id="batchScrapeToolbar" class="toolbar-batch">
+                                <span id="selectedCountLabel" class="text-sm text-muted font-bold">Выбрано: 0</span>
+                                <button onclick="handleBatchScrape()" class="btn btn-primary btn-sm">
                                     <i class="fa-solid fa-arrows-rotate"></i> Обновить цены
                                 </button>
                             </div>
-                            <div style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
-                                <div style="position: relative;">
-                                    <i class="fa-solid fa-search" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.85rem;"></i>
-                                    <input type="text" id="competitorSearch" placeholder="Поиск по названию..." oninput="filterCompetitors()" style="padding-left: 2.75rem; height: 42px; min-width: 220px; margin-bottom: 0;">
+                            <div class="toolbar-filters">
+                                <div class="form-input-icon">
+                                    <i class="fa-solid fa-search"></i>
+                                    <input class="form-input" type="text" id="competitorSearch" placeholder="Поиск по названию..." oninput="filterCompetitors()">
                                 </div>
-                                <select id="competitorStoreFilter" style="width: auto; min-width: 160px; margin-bottom: 0;">
+                                <select class="form-select" id="competitorStoreFilter" style="min-width:160px">
                                     <option value="all">Все магазины</option>
                                 </select>
-                                <select id="competitorCategoryFilter" style="width: auto; min-width: 175px; margin-bottom: 0;" onchange="filterCompetitors()">
+                                <select class="form-select" id="competitorCategoryFilter" onchange="filterCompetitors()" style="min-width:175px">
                                     <option value="all">Все группы товаров</option>
                                     {% for cat in categories %}
                                     <option value="{{ cat.id }}">{{ cat.name }}</option>
                                     {% endfor %}
                                 </select>
-                                <select id="competitorPriceFilter" style="width: auto; min-width: 150px; margin-bottom: 0;" onchange="filterCompetitors()">
+                                <select class="form-select" id="competitorPriceFilter" onchange="filterCompetitors()" style="min-width:150px">
                                     <option value="all">Все статусы</option>
                                     <option value="lower">Цена ниже</option>
                                     <option value="equal">Цена равна</option>
@@ -254,277 +257,277 @@
                             </div>
                         </div>
                         <div id="competitorLinksList">
-                            <div style="text-align: center; padding: 4rem;">
-                                <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 2rem; color: var(--primary); margin-bottom: 1rem;"></i>
-                                <p style="color: var(--text-muted);">Загрузка данных мониторинга...</p>
+                            <div class="text-center" style="padding:48px 0">
+                                <i class="fa-solid fa-circle-notch fa-spin" style="font-size:1.75rem;color:var(--primary);margin-bottom:12px"></i>
+                                <p class="text-muted">Загрузка данных мониторинга...</p>
                             </div>
                         </div>
                     </div>
                 </section>
 
-                <!-- SECTION: STATISTICS -->
+                <!-- ═══════ SECTION: STATISTICS ═══════ -->
                 <section id="section-statistics" class="content-section">
-                    <header style="display: flex; justify-content: space-between; align-items: end; margin-bottom: 2.5rem;">
+                    <header class="page-header flex justify-between items-end">
                         <div>
-                            <h1 style="font-size: 2.25rem; font-weight: 800;">Аналитика</h1>
-                            <p style="color: var(--text-muted); font-size: 1.1rem;">Комплексный анализ рынка и цен</p>
+                            <h1 class="page-title">Аналитика</h1>
+                            <p class="page-subtitle">Комплексный анализ рынка и цен</p>
                         </div>
-                        <div style="display: flex; gap: 0.75rem;">
-                            <a href="/api/export" class="secondary" style="text-decoration: none; padding: 0.75rem 1.25rem; border-radius: var(--radius-md); font-weight: 600; font-size: 0.875rem; border: 1px solid var(--border-soft); display: inline-flex; align-items: center; gap: 0.5rem;">
+                        <div class="flex gap-sm">
+                            <a href="/api/export" class="btn btn-secondary btn-sm">
                                 <i class="fa-solid fa-file-csv"></i> CSV
                             </a>
-                            <button onclick="generatePdfReport()" style="padding: 0.75rem 1.25rem; border-radius: var(--radius-md); font-weight: 600; font-size: 0.875rem; background: var(--success); color: white; display: inline-flex; align-items: center; gap: 0.5rem; border: none; cursor: pointer;">
+                            <button onclick="generatePdfReport()" class="btn btn-success btn-sm">
                                 <i class="fa-solid fa-file-pdf"></i> PDF Отчет
                             </button>
                         </div>
                     </header>
 
                     <!-- Summary Cards -->
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin-bottom: 2rem;">
-                        <div class="glass-card" style="margin-bottom: 0; padding: 1.5rem;">
-                            <div style="color: var(--text-muted); font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">Всего товаров</div>
-                            <div id="statTotal" style="font-size: 1.75rem; font-weight: 800; color: var(--text-main);">—</div>
+                    <div class="grid-4 mb-lg">
+                        <div class="card card--stat card--compact">
+                            <div class="stat-label">Всего товаров</div>
+                            <div class="stat-value" id="statTotal">—</div>
                         </div>
-                        <div class="glass-card" style="margin-bottom: 0; padding: 1.5rem; border-left: 4px solid var(--danger);">
-                            <div style="color: var(--text-muted); font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">В зоне риска</div>
-                            <div id="statAtRisk" style="font-size: 1.75rem; font-weight: 800; color: var(--danger);">—</div>
+                        <div class="card card--stat card--compact danger">
+                            <div class="stat-label">В зоне риска</div>
+                            <div class="stat-value danger" id="statAtRisk">—</div>
                         </div>
-                        <div class="glass-card" style="margin-bottom: 0; padding: 1.5rem; border-left: 4px solid var(--accent);">
-                            <div style="color: var(--text-muted); font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">Ср. разрыв</div>
-                            <div id="statAvgGap" style="font-size: 1.75rem; font-weight: 800; color: var(--text-main);">— ₽</div>
+                        <div class="card card--stat card--compact accent">
+                            <div class="stat-label">Ср. разрыв</div>
+                            <div class="stat-value" id="statAvgGap">— &#8381;</div>
                         </div>
-                        <div class="glass-card" style="margin-bottom: 0; padding: 1.5rem; border-left: 4px solid var(--success);">
-                            <div style="color: var(--text-muted); font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">Последнее обновление</div>
-                            <div id="statLastSync" style="font-size: 1rem; font-weight: 700; color: var(--text-main); margin-top: 0.25rem;">—</div>
+                        <div class="card card--stat card--compact success">
+                            <div class="stat-label">Последнее обновление</div>
+                            <div class="stat-value text-sm" id="statLastSync" style="font-size:1rem">—</div>
                         </div>
                     </div>
 
                     <!-- Report Tabs -->
-                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
-                        <button onclick="switchReportTab('avg-price')" class="report-tab active" id="tab-avg-price" style="padding: 0.6rem 1.2rem; border-radius: var(--radius-md); font-weight: 600; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-soft); background: var(--primary); color: white;">
+                    <div class="report-tabs">
+                        <button onclick="switchReportTab('avg-price')" class="report-tab active" id="tab-avg-price">
                             <i class="fa-solid fa-chart-bar"></i> Средняя цена группы
                         </button>
-                        <button onclick="switchReportTab('heatmap')" class="report-tab" id="tab-heatmap" style="padding: 0.6rem 1.2rem; border-radius: var(--radius-md); font-weight: 600; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-soft); background: var(--glass-bg); color: var(--text-main);">
+                        <button onclick="switchReportTab('heatmap')" class="report-tab" id="tab-heatmap">
                             <i class="fa-solid fa-table-cells"></i> Heatmap разрывов
                         </button>
-                        <button onclick="switchReportTab('trend')" class="report-tab" id="tab-trend" style="padding: 0.6rem 1.2rem; border-radius: var(--radius-md); font-weight: 600; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-soft); background: var(--glass-bg); color: var(--text-main);">
+                        <button onclick="switchReportTab('trend')" class="report-tab" id="tab-trend">
                             <i class="fa-solid fa-chart-line"></i> Динамика цен
                         </button>
-                        <button onclick="switchReportTab('risk')" class="report-tab" id="tab-risk" style="padding: 0.6rem 1.2rem; border-radius: var(--radius-md); font-weight: 600; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-soft); background: var(--glass-bg); color: var(--text-main);">
+                        <button onclick="switchReportTab('risk')" class="report-tab" id="tab-risk">
                             <i class="fa-solid fa-triangle-exclamation"></i> Зона риска
                         </button>
-                        <button onclick="switchReportTab('coverage')" class="report-tab" id="tab-coverage" style="padding: 0.6rem 1.2rem; border-radius: var(--radius-md); font-weight: 600; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-soft); background: var(--glass-bg); color: var(--text-main);">
+                        <button onclick="switchReportTab('coverage')" class="report-tab" id="tab-coverage">
                             <i class="fa-solid fa-chart-pie"></i> Покрытие мониторинга
                         </button>
                     </div>
 
-                    <!-- Report 1: Average Price by Category -->
-                    <div id="report-avg-price" class="report-panel">
-                        <div class="glass-card">
-                            <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
-                                <i class="fa-solid fa-chart-bar" style="color: var(--primary);"></i>
+                    <!-- Report 1: Average Price -->
+                    <div id="report-avg-price" class="report-panel active">
+                        <div class="card">
+                            <h2 class="section-title">
+                                <i class="fa-solid fa-chart-bar" style="color:var(--primary)"></i>
                                 Средняя цена группы товаров
                             </h2>
-                            <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: end;">
-                                <div style="flex: 1; min-width: 200px; position: relative; z-index: 10;">
-                                    <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; display: block;">Категория</label>
-                                    <select id="avgPriceCategoryFilter" onchange="renderAvgPriceReport()" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-soft); font-size: 0.875rem; background: #fff; cursor: pointer; -webkit-appearance: menulist;">
+                            <div class="flex gap-md mb-lg flex-wrap items-end">
+                                <div class="flex-1" style="min-width:200px;position:relative;z-index:10">
+                                    <label class="form-label text-muted">Категория</label>
+                                    <select class="form-select" id="avgPriceCategoryFilter" onchange="renderAvgPriceReport()">
                                         <option value="">Все категории</option>
                                     </select>
                                 </div>
-                                <div style="flex: 2; min-width: 300px;">
-                                    <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; display: block;">Магазины для сравнения</label>
-                                    <div id="avgPriceStoreFilter" style="display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.5rem; border: 1px solid var(--border-soft); border-radius: var(--radius-md); max-height: 100px; overflow-y: auto; background: var(--glass-bg);"></div>
+                                <div style="flex:2;min-width:300px">
+                                    <label class="form-label text-muted">Магазины для сравнения</label>
+                                    <div id="avgPriceStoreFilter" class="flex flex-wrap gap-xs" style="padding:8px;border:1px solid var(--border);border-radius:var(--radius-md);max-height:100px;overflow-y:auto;background:var(--bg-surface)"></div>
                                 </div>
                             </div>
-                            <div style="position: relative; min-height: 350px;">
+                            <div class="chart-container">
                                 <canvas id="avgPriceChart"></canvas>
                             </div>
                         </div>
                     </div>
 
                     <!-- Report 2: Heatmap -->
-                    <div id="report-heatmap" class="report-panel" style="display: none;">
-                        <div class="glass-card">
-                            <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
-                                <i class="fa-solid fa-table-cells" style="color: var(--primary);"></i>
+                    <div id="report-heatmap" class="report-panel">
+                        <div class="card">
+                            <h2 class="section-title">
+                                <i class="fa-solid fa-table-cells" style="color:var(--primary)"></i>
                                 Heatmap ценовых разрывов
                             </h2>
-                            <div style="margin-bottom: 1rem;">
-                                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; display: block;">Категория</label>
-                                <select id="heatmapCategoryFilter" onchange="renderHeatmap()" style="padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-soft); font-size: 0.875rem; min-width: 250px; background: #fff; cursor: pointer; -webkit-appearance: menulist;">
+                            <div class="mb-md">
+                                <label class="form-label text-muted">Категория</label>
+                                <select class="form-select" id="heatmapCategoryFilter" onchange="renderHeatmap()" style="min-width:250px">
                                     <option value="">Все категории</option>
                                 </select>
                             </div>
-                            <div id="heatmapContainer" style="overflow-x: auto;"></div>
-                            <div style="margin-top: 1rem; display: flex; gap: 1.5rem; font-size: 0.8rem; color: var(--text-muted);">
-                                <span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#22c55e;vertical-align:middle;margin-right:4px;"></span> Мы дешевле</span>
-                                <span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#fbbf24;vertical-align:middle;margin-right:4px;"></span> Примерно равны</span>
-                                <span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#ef4444;vertical-align:middle;margin-right:4px;"></span> Мы дороже</span>
-                                <span><span style="display:inline-block;width:14px;height:14px;border-radius:3px;background:#e2e8f0;vertical-align:middle;margin-right:4px;"></span> Нет данных</span>
+                            <div id="heatmapContainer" style="overflow-x:auto"></div>
+                            <div class="heatmap-legend">
+                                <span><span class="legend-swatch" style="background:#22c55e"></span> Мы дешевле</span>
+                                <span><span class="legend-swatch" style="background:#fbbf24"></span> Примерно равны</span>
+                                <span><span class="legend-swatch" style="background:#ef4444"></span> Мы дороже</span>
+                                <span><span class="legend-swatch" style="background:#e2e8f0"></span> Нет данных</span>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Report 3: Price Trend -->
-                    <div id="report-trend" class="report-panel" style="display: none;">
-                        <div class="glass-card">
-                            <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
-                                <i class="fa-solid fa-chart-line" style="color: var(--primary);"></i>
+                    <!-- Report 3: Trend -->
+                    <div id="report-trend" class="report-panel">
+                        <div class="card">
+                            <h2 class="section-title">
+                                <i class="fa-solid fa-chart-line" style="color:var(--primary)"></i>
                                 Динамика цен по категории (30 дней)
                             </h2>
-                            <div style="margin-bottom: 1rem;">
-                                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; display: block;">Категория</label>
-                                <select id="trendCategoryFilter" onchange="renderTrendReport()" style="padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-soft); font-size: 0.875rem; min-width: 250px; background: #fff; cursor: pointer; -webkit-appearance: menulist;">
+                            <div class="mb-md">
+                                <label class="form-label text-muted">Категория</label>
+                                <select class="form-select" id="trendCategoryFilter" onchange="renderTrendReport()" style="min-width:250px">
                                     <option value="">Все категории</option>
                                 </select>
                             </div>
-                            <div style="height: 400px; position: relative;">
+                            <div class="chart-container chart-container--tall">
                                 <canvas id="trendChart"></canvas>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Report 4: Risk Zone -->
-                    <div id="report-risk" class="report-panel" style="display: none;">
-                        <div class="glass-card">
-                            <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
-                                <i class="fa-solid fa-triangle-exclamation" style="color: var(--danger);"></i>
+                    <!-- Report 4: Risk -->
+                    <div id="report-risk" class="report-panel">
+                        <div class="card">
+                            <h2 class="section-title">
+                                <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger)"></i>
                                 Товары в зоне риска
                             </h2>
-                            <div id="riskTableContainer" style="overflow-x: auto;"></div>
+                            <div id="riskTableContainer" style="overflow-x:auto"></div>
                         </div>
                     </div>
 
                     <!-- Report 5: Coverage -->
-                    <div id="report-coverage" class="report-panel" style="display: none;">
-                        <div class="glass-card">
-                            <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
-                                <i class="fa-solid fa-chart-pie" style="color: var(--primary);"></i>
+                    <div id="report-coverage" class="report-panel">
+                        <div class="card">
+                            <h2 class="section-title">
+                                <i class="fa-solid fa-chart-pie" style="color:var(--primary)"></i>
                                 Покрытие мониторинга
                             </h2>
-                            <div style="display: grid; grid-template-columns: 300px 1fr; gap: 2rem; align-items: start;">
-                                <div style="position: relative; height: 300px;">
+                            <div class="coverage-grid">
+                                <div style="position:relative;height:300px">
                                     <canvas id="coverageDonut"></canvas>
                                 </div>
-                                <div id="coverageTableContainer" style="overflow-x: auto;"></div>
+                                <div id="coverageTableContainer" style="overflow-x:auto"></div>
                             </div>
                         </div>
                     </div>
                 </section>
 
-                <!-- SECTION: SETTINGS -->
+                <!-- ═══════ SECTION: SETTINGS ═══════ -->
                 <section id="section-settings" class="content-section">
-                    <header style="margin-bottom: 2.5rem;">
-                        <h1 style="font-size: 2.25rem; font-weight: 800;">Настройки</h1>
-                        <p style="color: var(--text-muted); font-size: 1.1rem;">Конфигурация уведомлений и расписания</p>
+                    <header class="page-header">
+                        <h1 class="page-title">Настройки</h1>
+                        <p class="page-subtitle">Конфигурация уведомлений и расписания</p>
                     </header>
-                    <div class="glass-card" style="max-width: 800px;">
+
+                    <!-- Telegram & Scan Interval -->
+                    <div class="card max-w-md">
                         <form id="settingsForm">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
-                                <div class="form-group">
-                                    <label>
-                                        <i class="fa-brands fa-telegram" style="color: #0088cc;"></i> Telegram Bot Token
+                            <div class="settings-grid mb-lg">
+                                <div class="form-group mb-0">
+                                    <label class="form-label">
+                                        <i class="fa-brands fa-telegram" style="color:#0088cc"></i> Telegram Bot Token
                                     </label>
-                                    <input type="password" id="set_telegram_bot_token" placeholder="Введите токен от BotFather">
+                                    <input class="form-input" type="password" id="set_telegram_bot_token" placeholder="Введите токен от BotFather">
                                 </div>
-                                <div class="form-group">
-                                    <label>
+                                <div class="form-group mb-0">
+                                    <label class="form-label">
                                         <i class="fa-solid fa-id-badge"></i> Telegram Chat ID
                                     </label>
-                                    <input type="text" id="set_telegram_chat_id" placeholder="ID вашего чата">
+                                    <input class="form-input" type="text" id="set_telegram_chat_id" placeholder="ID вашего чата">
                                 </div>
                             </div>
-                            <div class="form-group" style="width: 200px;">
-                                <label>
+                            <div class="form-group" style="max-width:200px">
+                                <label class="form-label">
                                     <i class="fa-solid fa-clock"></i> Интервал (часы)
                                 </label>
-                                <input type="number" id="set_scan_interval_hours" min="1" max="168" placeholder="12">
+                                <input class="form-input" type="number" id="set_scan_interval_hours" min="1" max="168" placeholder="12">
                             </div>
-                            <button type="submit">
+                            <button type="submit" class="btn btn-primary">
                                 <i class="fa-solid fa-cloud-arrow-up"></i> Сохранить настройки
                             </button>
                         </form>
                     </div>
 
                     <!-- Bitrix24 Integration -->
-                    <div class="glass-card" style="max-width: 800px; margin-top: 2rem;">
-                        <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
-                            <i class="fa-solid fa-building" style="color: #2fc7f7;"></i>
+                    <div class="card max-w-md mt-lg">
+                        <h2 class="section-title">
+                            <i class="fa-solid fa-building" style="color:#2fc7f7"></i>
                             Интеграция с Битрикс24
                         </h2>
-                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                        <p class="text-muted text-sm mb-lg">
                             Уведомления об изменении цен конкурентов будут отправляться в групповой чат Битрикс24 через входящий вебхук.
                             Для настройки перейдите в <b>Битрикс24 &rarr; Приложения &rarr; Разработчикам &rarr; Готовые сценарии &rarr; Входящий вебхук</b> и включите права на <b>Чат (im)</b>.
                         </p>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 1.5rem;">
-                            <div class="form-group">
-                                <label>
+                        <div class="settings-grid mb-lg">
+                            <div class="form-group mb-0">
+                                <label class="form-label">
                                     <i class="fa-solid fa-link"></i> Webhook URL
                                 </label>
-                                <input type="url" id="set_b24_webhook_url" placeholder="https://your-domain.bitrix24.ru/rest/1/abc123/">
+                                <input class="form-input" type="url" id="set_b24_webhook_url" placeholder="https://your-domain.bitrix24.ru/rest/1/abc123/">
                             </div>
-                            <div class="form-group">
-                                <label>
+                            <div class="form-group mb-0">
+                                <label class="form-label">
                                     <i class="fa-solid fa-comments"></i> Chat ID группового чата
                                 </label>
-                                <input type="text" id="set_b24_chat_id" placeholder="182735" value="182735">
+                                <input class="form-input" type="text" id="set_b24_chat_id" placeholder="182735" value="182735">
                             </div>
                         </div>
-                        <div style="display: flex; gap: 1rem; align-items: center;">
-                            <button type="button" onclick="window.saveBitrix24Settings()">
+                        <div class="settings-actions">
+                            <button type="button" class="btn btn-primary" onclick="window.saveBitrix24Settings()">
                                 <i class="fa-solid fa-cloud-arrow-up"></i> Сохранить
                             </button>
-                            <button type="button" class="secondary" onclick="window.testBitrix24()" style="gap: 0.5rem;">
+                            <button type="button" class="btn btn-secondary" onclick="window.testBitrix24()">
                                 <i class="fa-solid fa-paper-plane"></i> Тест
                             </button>
-                            <div id="b24TestResult" style="font-size: 0.9rem; font-weight: 600;"></div>
+                            <div id="b24TestResult" class="settings-result"></div>
                         </div>
                     </div>
 
                     <!-- Store Colors -->
-                    <div class="glass-card" style="max-width: 800px; margin-top: 2rem;">
-                        <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
-                            <i class="fa-solid fa-palette" style="color: var(--secondary);"></i>
+                    <div class="card max-w-md mt-lg">
+                        <h2 class="section-title">
+                            <i class="fa-solid fa-palette" style="color:var(--secondary)"></i>
                             Цвета магазинов на графиках
                         </h2>
-                        <div style="margin-bottom: 1rem;">
-                            <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border-soft);">
-                                <input type="color" id="ourStoreColorPicker" value="#6366f1" style="width: 36px; height: 36px; border: 2px solid var(--border-soft); border-radius: var(--radius-sm); cursor: pointer; padding: 2px;">
-                                <div style="flex: 1;">
-                                    <div style="font-weight: 700; font-size: 0.95rem;">Аллея Дома</div>
-                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Наш магазин</div>
-                                </div>
-                                <button onclick="saveOurStoreColor()" class="secondary" style="padding: 0.4rem 1rem; font-size: 0.8rem;">Сохранить</button>
+                        <div class="store-color-row">
+                            <input type="color" class="color-picker" id="ourStoreColorPicker" value="#6366f1">
+                            <div class="store-color-info">
+                                <div class="store-color-name">Аллея Дома</div>
+                                <div class="store-color-domain">Наш магазин</div>
                             </div>
+                            <button onclick="saveOurStoreColor()" class="btn btn-secondary btn-sm">Сохранить</button>
                         </div>
-                        <div id="storeColorList" style="display: flex; flex-direction: column; gap: 0;"></div>
+                        <div id="storeColorList"></div>
                     </div>
                 </section>
 
-                <!-- SHARED: PRODUCT ANALYTICS MODAL -->
-                <div id="analyticsSection" class="glass-card" style="display: none; position: fixed; top: 10%; right: 10%; left: 10%; bottom: 10%; z-index: 2000; overflow-y: auto; box-shadow: 0 0 100px rgba(0,0,0,0.2);">
-                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 2rem;">
+                <!-- ═══════ ANALYTICS MODAL ═══════ -->
+                <div id="analyticsSection" class="analytics-modal">
+                    <div class="modal-header">
                         <div>
-                            <h2 id="analyticsTitle" style="font-size: 1.75rem; font-weight: 800; margin-bottom: 0.5rem;">Аналитика по товару</h2>
-                            <div id="recommendationBadge" style="display: inline-block; padding: 0.375rem 0.875rem; border-radius: var(--radius-md); font-weight: 700; font-size: 0.75rem; text-transform: uppercase;"></div>
+                            <h2 id="analyticsTitle" class="modal-title">Аналитика по товару</h2>
+                            <div id="recommendationBadge" class="badge" style="display:inline-flex"></div>
                         </div>
-                        <button onclick="document.getElementById('analyticsSection').style.display='none'" class="secondary" style="border-radius: 50%; width: 40px; height: 40px; justify-content: center; padding: 0;">
+                        <button onclick="closeAnalytics()" class="btn btn-secondary btn-icon round" aria-label="Close">
                             <i class="fa-solid fa-xmark"></i>
                         </button>
                     </div>
                     
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 2rem;">
-                        <div class="glass-card" style="margin-bottom: 0; background: #f8fafc; text-align: center;">
-                            <div style="font-size: 0.875rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.5rem;">Наша цена</div>
-                            <div id="ourPriceBadge" style="font-size: 2rem; font-weight: 800;">0 ₽</div>
+                    <div class="price-cards">
+                        <div class="price-card">
+                            <div class="price-card-label">Наша цена</div>
+                            <div class="price-card-value" id="ourPriceBadge">0 &#8381;</div>
                         </div>
-                        <div class="glass-card" style="margin-bottom: 0; background: #f8fafc; text-align: center;">
-                            <div style="font-size: 0.875rem; color: var(--text-muted); font-weight: 600; margin-bottom: 0.5rem;">Минимум конкурентов</div>
-                            <div id="minCompBadge" style="font-size: 2rem; font-weight: 800; color: var(--success);">0 ₽</div>
+                        <div class="price-card">
+                            <div class="price-card-label">Минимум конкурентов</div>
+                            <div class="price-card-value text-success" id="minCompBadge">0 &#8381;</div>
                         </div>
                     </div>
-                    <div style="height: 350px;">
+                    <div style="height:350px">
                         <canvas id="priceChart"></canvas>
                     </div>
                 </div>
@@ -533,16 +536,17 @@
         </main>
     </div>
 
-    <!-- Background Overlay for Modal -->
-    <div id="modalOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); z-index: 1000;"></div>
+    <!-- Modal Overlay -->
+    <div id="modalOverlay" class="modal-overlay"></div>
 
+    <!-- Loading Spinner -->
     <div id="loader" class="spinner-overlay">
-        <div style="text-align: center;">
+        <div class="text-center">
             <div class="spinner"></div>
-            <div style="margin-top: 1rem; font-weight: 700; color: var(--primary);">Обработка данных...</div>
+            <div class="spinner-text">Обработка данных...</div>
         </div>
     </div>
 
-    <script src="/static/app.js?v=19"></script>
+    <script src="/static/app.js?v=20"></script>
 </body>
 </html>

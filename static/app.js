@@ -327,15 +327,12 @@ const REPORT_COLORS = [
 ];
 
 function switchReportTab(tabId) {
-    document.querySelectorAll('.report-panel').forEach(p => p.style.display = 'none');
-    document.querySelectorAll('.report-tab').forEach(t => {
-        t.style.background = 'var(--glass-bg)';
-        t.style.color = 'var(--text-main)';
-    });
+    document.querySelectorAll('.report-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
     const panel = document.getElementById('report-' + tabId);
     const tab = document.getElementById('tab-' + tabId);
-    if (panel) panel.style.display = 'block';
-    if (tab) { tab.style.background = 'var(--primary)'; tab.style.color = 'white'; }
+    if (panel) panel.classList.add('active');
+    if (tab) tab.classList.add('active');
 
     // Render on first switch
     if (tabId === 'avg-price') renderAvgPriceReport();
@@ -936,8 +933,8 @@ async function displayProductAnalytics(productId) {
     
     if (!section) return; 
     
-    section.style.display = 'block';
-    if (overlay) overlay.style.display = 'block';
+    section.classList.add('active');
+    if (overlay) overlay.classList.add('active');
     section.scrollTop = 0;
     
     showLoading("Загрузка аналитики...");
@@ -1126,14 +1123,15 @@ function renderChart(data) {
 function showLoading(text = "Обработка данных...") {
     const loader = document.getElementById('loader');
     if (loader) {
-        loader.querySelector('div[style*="font-weight: 700"]').textContent = text;
-        loader.style.display = 'flex';
+        const spinnerText = loader.querySelector('.spinner-text');
+        if (spinnerText) spinnerText.textContent = text;
+        loader.classList.add('active');
     }
 }
 
 function hideLoading() {
     const loader = document.getElementById('loader');
-    if (loader) loader.style.display = 'none';
+    if (loader) loader.classList.remove('active');
 }
 
 async function loadDashboardStats() {
@@ -1233,8 +1231,8 @@ window.handleDelete = (btn) => deleteProductById(btn);
 window.closeAnalytics = () => {
     const s = document.getElementById('analyticsSection');
     const o = document.getElementById('modalOverlay');
-    if (s) s.style.display = 'none';
-    if (o) o.style.display = 'none';
+    if (s) s.classList.remove('active');
+    if (o) o.classList.remove('active');
 }
 
 // Analytics report bridges (called from onclick in admin.html)
@@ -1433,3 +1431,27 @@ async function generatePdfReport() {
 }
 
 window.generatePdfReport = generatePdfReport;
+
+// --- Dark Mode ---
+
+window.toggleTheme = () => {
+    const html = document.documentElement;
+    const isDark = html.getAttribute('data-theme') === 'dark';
+    html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    localStorage.setItem('theme', isDark ? 'light' : 'dark');
+    // Update toggle icon
+    const icon = document.querySelector('#themeToggle i');
+    if (icon) icon.className = isDark ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+};
+
+// Apply saved theme on load
+(function() {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'dark') {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.addEventListener('DOMContentLoaded', () => {
+            const icon = document.querySelector('#themeToggle i');
+            if (icon) icon.className = 'fa-solid fa-sun';
+        });
+    }
+})();

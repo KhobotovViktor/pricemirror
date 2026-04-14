@@ -8,41 +8,39 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body class="auth-page">
-    <div class="auth-card glass-card">
-        <div style="margin-bottom: 2rem;">
-            <div style="width: 64px; height: 64px; background: var(--primary-gradient); border-radius: 1.25rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; color: white; font-size: 2rem; box-shadow: 0 10px 30px rgba(99, 102, 241, 0.3);">
-                <i class="fa-solid fa-magnifying-glass-chart"></i>
-            </div>
-            <h1 style="font-size: 1.75rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem; letter-spacing: -0.025em;">Price Mirror</h1>
-            <p style="color: var(--text-muted); font-weight: 500;">Вход в систему управления</p>
+    <div class="auth-card">
+        <div class="auth-icon">
+            <i class="fa-solid fa-magnifying-glass-chart"></i>
         </div>
+        <h1 class="auth-title">Price Mirror</h1>
+        <p class="auth-subtitle">Вход в систему управления</p>
         
         <form id="loginForm">
-            <div class="form-group" style="text-align: left; position: relative;">
-                <label style="color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; margin-left: 0.5rem;">Логин</label>
-                <div style="position: relative;">
-                    <i class="fa-solid fa-user" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.9rem;"></i>
-                    <input type="text" id="username" name="username" placeholder="Логин" required style="padding-left: 2.75rem;">
+            <div class="form-group" style="text-align:left">
+                <label class="form-label text-muted uppercase text-xs">Логин</label>
+                <div class="form-input-icon">
+                    <i class="fa-solid fa-user"></i>
+                    <input class="form-input" type="text" id="username" name="username" placeholder="Логин" required autocomplete="username">
                 </div>
             </div>
 
-            <div class="form-group" style="text-align: left; position: relative;">
-                <label style="color: var(--text-muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; margin-left: 0.5rem;">Пароль доступа</label>
-                <div style="position: relative;">
-                    <i class="fa-solid fa-lock" style="position: absolute; left: 1rem; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 0.9rem;"></i>
-                    <input type="password" id="password" name="password" placeholder="Пароль" required style="padding-left: 2.75rem;">
+            <div class="form-group" style="text-align:left">
+                <label class="form-label text-muted uppercase text-xs">Пароль доступа</label>
+                <div class="form-input-icon">
+                    <i class="fa-solid fa-lock"></i>
+                    <input class="form-input" type="password" id="password" name="password" placeholder="Пароль" required autocomplete="current-password">
                 </div>
             </div>
 
-            <button type="submit" style="width: 100%; justify-content: center; padding: 1rem; font-size: 1rem; margin-top: 0.5rem;">
+            <button type="submit" class="btn btn-primary btn-lg w-full" style="margin-top:8px">
                 Авторизоваться
             </button>
         </form>
 
-        <div id="loginMsg" style="margin-top: 1.25rem; font-size: 0.875rem; color: var(--danger); font-weight: 600;"></div>
+        <div id="loginMsg" aria-live="polite"></div>
         
-        <div style="margin-top: 3rem; font-size: 0.75rem; color: #94a3b8; line-height: 1.6;">
-            © 2026 Price Mirror. Доступ только для сотрудников компании.
+        <div class="auth-footer">
+            &copy; 2026 Price Mirror. Доступ только для сотрудников компании.
         </div>
     </div>
 

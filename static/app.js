@@ -206,7 +206,6 @@ window.switchSection = (sectionId) => {
 
     // Initializations for specific sections
     if (sectionId === 'statistics') {
-        _analyticsData = null; // reset cache on section switch
         loadStatisticsSection();
     }
     if (sectionId === 'competitors') {
@@ -389,33 +388,19 @@ function switchReportTab(tabId) {
     if (tabId === 'coverage') renderCoverageReport();
 }
 
-async function loadAnalyticsData() {
-    if (_analyticsData) return _analyticsData;
+async function loadAnalyticsData(forceReload) {
+    if (_analyticsData && !forceReload) return _analyticsData;
     try {
         const resp = await fetch('/api/analytics/full', { credentials: 'include' });
         if (!resp.ok) {
             console.error('Analytics API error:', resp.status, resp.statusText);
+            const body = await resp.text();
+            console.error('Response body:', body.substring(0, 500));
             return null;
         }
         _analyticsData = await resp.json();
-        // Populate category filters
-        const cats = _analyticsData.categories || [];
-        ['avgPriceCategoryFilter', 'heatmapCategoryFilter', 'trendCategoryFilter'].forEach(id => {
-            const sel = document.getElementById(id);
-            if (!sel) return;
-            sel.innerHTML = '<option value="">Все категории</option>' +
-                cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
-        });
-        // Populate store checkboxes for Report 1
-        const storeDiv = document.getElementById('avgPriceStoreFilter');
-        if (storeDiv) {
-            const stores = _analyticsData.stores || [];
-            storeDiv.innerHTML =
-                `<label style="font-size:0.78rem;display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="our" checked onchange="renderAvgPriceReport()"> Аллея Дома</label>` +
-                stores.map(s =>
-                    `<label style="font-size:0.78rem;display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="${s.id}" checked onchange="renderAvgPriceReport()"> ${s.name}</label>`
-                ).join('');
-        }
+        console.log('Analytics data loaded:', _analyticsData.categories?.length, 'cats,', _analyticsData.products?.length, 'products,', _analyticsData.stores?.length, 'stores');
+        _populateAnalyticsFilters();
         return _analyticsData;
     } catch (err) {
         console.error('Analytics data error:', err);
@@ -423,8 +408,38 @@ async function loadAnalyticsData() {
     }
 }
 
+function _populateAnalyticsFilters() {
+    if (!_analyticsData) return;
+    const cats = _analyticsData.categories || [];
+    console.log('Populating filters with', cats.length, 'categories');
+    ['avgPriceCategoryFilter', 'heatmapCategoryFilter', 'trendCategoryFilter'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) { console.warn('Filter element not found:', id); return; }
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">Все категории</option>' +
+            cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        if (currentVal) sel.value = currentVal; // restore selection
+    });
+    // Populate store checkboxes for Report 1
+    const storeDiv = document.getElementById('avgPriceStoreFilter');
+    if (storeDiv) {
+        const stores = _analyticsData.stores || [];
+        if (storeDiv.children.length === 0) {
+            storeDiv.innerHTML =
+                `<label style="font-size:0.78rem;display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="our" checked onchange="renderAvgPriceReport()"> Аллея Дома</label>` +
+                stores.map(s =>
+                    `<label style="font-size:0.78rem;display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="${s.id}" checked onchange="renderAvgPriceReport()"> ${s.name}</label>`
+                ).join('');
+        }
+    }
+}
+
 async function loadStatisticsSection() {
-    await loadAnalyticsData();
+    const data = await loadAnalyticsData(true); // force reload
+    if (!data) {
+        console.error('Failed to load analytics data for statistics section');
+        return;
+    }
     renderAvgPriceReport();
 }
 

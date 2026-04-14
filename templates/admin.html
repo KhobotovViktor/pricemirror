@@ -330,9 +330,9 @@
                                 Средняя цена группы товаров
                             </h2>
                             <div style="display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: end;">
-                                <div style="flex: 1; min-width: 200px;">
+                                <div style="flex: 1; min-width: 200px; position: relative; z-index: 10;">
                                     <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; display: block;">Категория</label>
-                                    <select id="avgPriceCategoryFilter" onchange="renderAvgPriceReport()" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-soft); font-size: 0.875rem;">
+                                    <select id="avgPriceCategoryFilter" onchange="renderAvgPriceReport()" style="width: 100%; padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-soft); font-size: 0.875rem; background: #fff; cursor: pointer; -webkit-appearance: menulist;">
                                         <option value="">Все категории</option>
                                     </select>
                                 </div>
@@ -356,7 +356,7 @@
                             </h2>
                             <div style="margin-bottom: 1rem;">
                                 <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; display: block;">Категория</label>
-                                <select id="heatmapCategoryFilter" onchange="renderHeatmap()" style="padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-soft); font-size: 0.875rem; min-width: 250px;">
+                                <select id="heatmapCategoryFilter" onchange="renderHeatmap()" style="padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-soft); font-size: 0.875rem; min-width: 250px; background: #fff; cursor: pointer; -webkit-appearance: menulist;">
                                     <option value="">Все категории</option>
                                 </select>
                             </div>
@@ -379,7 +379,7 @@
                             </h2>
                             <div style="margin-bottom: 1rem;">
                                 <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem; display: block;">Категория</label>
-                                <select id="trendCategoryFilter" onchange="renderTrendReport()" style="padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-soft); font-size: 0.875rem; min-width: 250px;">
+                                <select id="trendCategoryFilter" onchange="renderTrendReport()" style="padding: 0.6rem; border-radius: var(--radius-md); border: 1px solid var(--border-soft); font-size: 0.875rem; min-width: 250px; background: #fff; cursor: pointer; -webkit-appearance: menulist;">
                                     <option value="">Все категории</option>
                                 </select>
                             </div>

@@ -32,6 +32,7 @@
     
     --primary-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
     --surface-gradient: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+    --glass-bg: rgba(255, 255, 255, 0.8);
 }
 
 * {
@@ -227,6 +228,12 @@ input, select {
     outline: none;
     transition: all 0.2s ease;
     font-size: 1rem;
+    -webkit-appearance: auto;
+    appearance: auto;
+}
+
+select {
+    cursor: pointer;
 }
 
 input:focus, select:focus {

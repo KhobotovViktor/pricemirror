@@ -1121,12 +1121,16 @@ async function loadSettings() {
         const els = {
             token: document.getElementById('set_telegram_bot_token'),
             chat: document.getElementById('set_telegram_chat_id'),
-            interval: document.getElementById('set_scan_interval_hours')
+            interval: document.getElementById('set_scan_interval_hours'),
+            b24Url: document.getElementById('set_b24_webhook_url'),
+            b24Chat: document.getElementById('set_b24_chat_id')
         };
 
         if (els.token) els.token.value = data.telegram_bot_token || '';
         if (els.chat) els.chat.value = data.telegram_chat_id || '';
         if (els.interval) els.interval.value = data.scan_interval_hours || '12';
+        if (els.b24Url) els.b24Url.value = data.b24_webhook_url || '';
+        if (els.b24Chat) els.b24Chat.value = data.b24_chat_id || '182735';
 
         // Load our store color
         const ourPicker = document.getElementById('ourStoreColorPicker');
@@ -1197,6 +1201,69 @@ window.renderRiskReport = renderRiskReport;
 window.renderCoverageReport = renderCoverageReport;
 window.saveStoreColor = saveStoreColor;
 window.saveOurStoreColor = saveOurStoreColor;
+
+// --- Bitrix24 Integration ---
+
+window.saveBitrix24Settings = async () => {
+    const webhookUrl = document.getElementById('set_b24_webhook_url')?.value || '';
+    const chatId = document.getElementById('set_b24_chat_id')?.value || '';
+    const resultDiv = document.getElementById('b24TestResult');
+
+    if (!webhookUrl) {
+        if (resultDiv) {
+            resultDiv.innerHTML = '<span style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> Укажите Webhook URL</span>';
+        }
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/settings/bitrix24', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ b24_webhook_url: webhookUrl, b24_chat_id: chatId })
+        });
+
+        if (response.ok) {
+            if (resultDiv) {
+                resultDiv.innerHTML = '<span style="color: var(--success);"><i class="fa-solid fa-check-circle"></i> Сохранено</span>';
+            }
+        } else {
+            if (resultDiv) {
+                resultDiv.innerHTML = '<span style="color: var(--danger);"><i class="fa-solid fa-xmark-circle"></i> Ошибка сохранения</span>';
+            }
+        }
+    } catch (err) {
+        console.error('B24 save error:', err);
+        if (resultDiv) {
+            resultDiv.innerHTML = '<span style="color: var(--danger);">Ошибка соединения</span>';
+        }
+    }
+};
+
+window.testBitrix24 = async () => {
+    const resultDiv = document.getElementById('b24TestResult');
+    if (resultDiv) {
+        resultDiv.innerHTML = '<span style="color: var(--primary);"><i class="fa-solid fa-spinner fa-spin"></i> Отправка тестового сообщения...</span>';
+    }
+
+    try {
+        const response = await fetch('/api/bitrix24/test', { method: 'POST' });
+        const data = await response.json();
+
+        if (resultDiv) {
+            if (data.status === 'success') {
+                resultDiv.innerHTML = `<span style="color: var(--success);"><i class="fa-solid fa-check-circle"></i> ${data.message}</span>`;
+            } else {
+                resultDiv.innerHTML = `<span style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> ${data.message}</span>`;
+            }
+        }
+    } catch (err) {
+        console.error('B24 test error:', err);
+        if (resultDiv) {
+            resultDiv.innerHTML = '<span style="color: var(--danger);">Ошибка соединения с сервером</span>';
+        }
+    }
+};
 
 // --- PDF Report (client-side) ---
 

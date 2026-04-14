@@ -950,3 +950,34 @@ async def update_our_store_color(color: str = Form(...), user_id: str = Depends(
         return {"status": "ok", "color": color}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- Bitrix24 Integration ---
+
+@app.post("/api/bitrix24/test")
+async def test_bitrix24(user_id: str = Depends(get_current_user)):
+    """Sends a test message to the configured Bitrix24 group chat"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        from .core.bitrix24 import bitrix24
+        success, detail = bitrix24.send_test()
+        return {"status": "success" if success else "error", "message": detail}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+
+@app.post("/api/settings/bitrix24")
+async def save_bitrix24_settings(request: Request, user_id: str = Depends(get_current_user)):
+    """Saves Bitrix24 integration settings (webhook URL + chat ID)"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        data = await request.json()
+        for key in ("b24_webhook_url", "b24_chat_id"):
+            value = data.get(key, "")
+            supabase.table("system_settings").upsert(
+                {"key": key, "value": str(value)}, on_conflict="key"
+            ).execute()
+        return {"status": "success", "message": "Настройки Битрикс24 сохранены"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

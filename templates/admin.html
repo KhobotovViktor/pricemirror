@@ -440,6 +440,41 @@
                         </form>
                     </div>
 
+                    <!-- Bitrix24 Integration -->
+                    <div class="glass-card" style="max-width: 800px; margin-top: 2rem;">
+                        <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+                            <i class="fa-solid fa-building" style="color: #2fc7f7;"></i>
+                            Интеграция с Битрикс24
+                        </h2>
+                        <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">
+                            Уведомления об изменении цен конкурентов будут отправляться в групповой чат Битрикс24 через входящий вебхук.
+                            Для настройки перейдите в <b>Битрикс24 &rarr; Приложения &rarr; Разработчикам &rarr; Готовые сценарии &rarr; Входящий вебхук</b> и включите права на <b>Чат (im)</b>.
+                        </p>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-bottom: 1.5rem;">
+                            <div class="form-group">
+                                <label>
+                                    <i class="fa-solid fa-link"></i> Webhook URL
+                                </label>
+                                <input type="url" id="set_b24_webhook_url" placeholder="https://your-domain.bitrix24.ru/rest/1/abc123/">
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <i class="fa-solid fa-comments"></i> Chat ID группового чата
+                                </label>
+                                <input type="text" id="set_b24_chat_id" placeholder="182735" value="182735">
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <button type="button" onclick="window.saveBitrix24Settings()">
+                                <i class="fa-solid fa-cloud-arrow-up"></i> Сохранить
+                            </button>
+                            <button type="button" class="secondary" onclick="window.testBitrix24()" style="gap: 0.5rem;">
+                                <i class="fa-solid fa-paper-plane"></i> Тест
+                            </button>
+                            <div id="b24TestResult" style="font-size: 0.9rem; font-weight: 600;"></div>
+                        </div>
+                    </div>
+
                     <!-- Store Colors -->
                     <div class="glass-card" style="max-width: 800px; margin-top: 2rem;">
                         <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
@@ -501,6 +536,6 @@
         </div>
     </div>
 
-    <script src="/static/app.js?v=17"></script>
+    <script src="/static/app.js?v=18"></script>
 </body>
 </html>

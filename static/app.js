@@ -978,47 +978,91 @@ function renderChart(data) {
     }
 
     const sortedHistory = [...data.history].sort((a, b) => new Date(a.date) - new Date(b.date));
-    const labels = sortedHistory.map(h => new Date(h.date).toLocaleDateString());
-    const prices = sortedHistory.map(h => h.price);
+
+    // Group history by store
+    const storeData = {};
+    const allDates = new Set();
+    for (const h of sortedHistory) {
+        const store = h.store || 'Конкурент';
+        if (!storeData[store]) storeData[store] = {};
+        const day = new Date(h.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        allDates.add(day);
+        // Keep latest price per day per store
+        storeData[store][day] = h.price;
+    }
+
+    const labels = [...allDates];
+
+    // Build per-store datasets
+    const storeColors = [
+        '#a855f7', '#ec4899', '#f97316', '#22c55e', '#06b6d4',
+        '#3b82f6', '#eab308', '#14b8a6', '#f43f5e', '#8b5cf6',
+    ];
+    const datasets = [];
+    let ci = 0;
+    for (const [store, dayPrices] of Object.entries(storeData)) {
+        const color = storeColors[ci % storeColors.length];
+        datasets.push({
+            label: store,
+            data: labels.map(d => dayPrices[d] ?? null),
+            borderColor: color,
+            backgroundColor: color + '10',
+            fill: false,
+            tension: 0.4,
+            pointRadius: 4,
+            pointBackgroundColor: '#ffffff',
+            pointBorderColor: color,
+            pointBorderWidth: 2,
+            spanGaps: true,
+        });
+        ci++;
+    }
+
+    // Add "Наша цена" as dashed line
+    datasets.push({
+        label: 'Наша цена',
+        data: labels.map(() => data.our_product.current_price),
+        borderColor: '#6366f1',
+        borderDash: [8, 4],
+        pointRadius: 0,
+        fill: false,
+        borderWidth: 2
+    });
 
     priceChart = new Chart(ctx, {
         type: 'line',
-        data: {
-            labels: labels,
-            datasets: [
-                {
-                    label: 'Цена конкурентов',
-                    data: prices,
-                    borderColor: '#a855f7',
-                    backgroundColor: 'rgba(168, 85, 247, 0.05)',
-                    fill: true,
-                    tension: 0.4,
-                    pointRadius: 4,
-                    pointBackgroundColor: '#ffffff',
-                    pointBorderColor: '#a855f7'
-                },
-                {
-                    label: 'Наша цена',
-                    data: labels.map(() => data.our_product.current_price),
-                    borderColor: '#6366f1',
-                    borderDash: [8, 4],
-                    pointRadius: 0,
-                    fill: false,
-                    borderWidth: 2
-                }
-            ]
-        },
+        data: { labels, datasets },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
                 legend: { 
                     position: 'bottom',
-                    labels: { color: '#64748b', font: { weight: '600' } } 
+                    labels: { 
+                        color: '#64748b', 
+                        font: { weight: '600', size: 11 },
+                        usePointStyle: true,
+                        padding: 14,
+                    } 
+                },
+                tooltip: {
+                    backgroundColor: '#1e293b',
+                    padding: 12,
+                    cornerRadius: 8,
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: function(context) {
+                            return ` ${context.dataset.label}: ${context.parsed.y?.toLocaleString()} ₽`;
+                        }
+                    }
                 }
             },
             scales: {
-                y: { ticks: { color: '#64748b' }, grid: { color: '#f1f5f9' } },
+                y: { 
+                    ticks: { color: '#64748b', callback: v => v.toLocaleString() + ' ₽' }, 
+                    grid: { color: '#f1f5f9' } 
+                },
                 x: { ticks: { color: '#64748b' }, grid: { display: false } }
             }
         }

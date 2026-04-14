@@ -3,6 +3,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     // 0. Initial Load 
+    initCustomDropdowns();
     loadDashboardStats();
     loadSettings();
     
@@ -144,6 +145,190 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// --- Custom Dropdown Component ---
+// Converts <select class="form-select"> into custom styled popups
+// Keeps a hidden <select> in sync for form submissions and JS value reading
+
+let _activeDropdown = null;
+
+function _closeAllDropdowns(e) {
+    if (_activeDropdown) {
+        const dd = _activeDropdown;
+        if (!dd.contains(e?.target)) {
+            dd.classList.remove('open');
+            _activeDropdown = null;
+        }
+    }
+}
+
+document.addEventListener('click', _closeAllDropdowns);
+
+function initCustomDropdowns() {
+    document.querySelectorAll('select.form-select:not([data-dd-init])').forEach(sel => {
+        sel.setAttribute('data-dd-init', '1');
+        _buildCustomDropdown(sel);
+    });
+}
+
+function _buildCustomDropdown(sel) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'custom-dropdown';
+    if (sel.style.minWidth) wrapper.style.minWidth = sel.style.minWidth;
+    if (sel.style.cssText) {
+        // Copy inline width/min-width styles
+        const mw = sel.style.minWidth;
+        if (mw) wrapper.style.minWidth = mw;
+    }
+
+    // Copy classes from parent icon wrapper if present
+    const iconWrapper = sel.closest('.form-input-icon');
+
+    // Build trigger
+    const currentOpt = sel.options[sel.selectedIndex];
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'custom-dropdown-trigger';
+    trigger.setAttribute('tabindex', '0');
+    trigger.innerHTML = `<span class="dd-label">${currentOpt ? currentOpt.textContent : ''}</span><i class="fa-solid fa-chevron-down dd-icon"></i>`;
+
+    // Build panel
+    const panel = document.createElement('div');
+    panel.className = 'custom-dropdown-panel';
+
+    // Search box for dropdowns with many options
+    const optCount = sel.options.length;
+    let searchInput = null;
+    if (optCount > 8) {
+        const searchWrap = document.createElement('div');
+        searchWrap.className = 'custom-dropdown-search';
+        searchInput = document.createElement('input');
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Поиск...';
+        searchWrap.appendChild(searchInput);
+        panel.appendChild(searchWrap);
+    }
+
+    // Build options
+    const optList = document.createElement('div');
+    optList.className = 'dd-option-list';
+    _renderDdOptions(sel, optList);
+    panel.appendChild(optList);
+
+    wrapper.appendChild(trigger);
+    wrapper.appendChild(panel);
+
+    // Hide original select
+    sel.style.display = 'none';
+    sel.parentNode.insertBefore(wrapper, sel);
+    wrapper.appendChild(sel); // move select inside wrapper
+
+    // If was inside form-input-icon, move icon styling
+    if (iconWrapper) {
+        const icon = iconWrapper.querySelector('i:first-child');
+        if (icon) {
+            trigger.insertBefore(icon.cloneNode(true), trigger.firstChild);
+            icon.style.display = 'none';
+        }
+    }
+
+    // Events
+    trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const isOpen = wrapper.classList.contains('open');
+        _closeAllDropdowns();
+        if (!isOpen) {
+            wrapper.classList.add('open');
+            _activeDropdown = wrapper;
+            _positionPanel(wrapper, trigger, panel);
+            if (searchInput) { searchInput.value = ''; _filterDdOptions(optList, ''); searchInput.focus(); }
+            // Scroll selected into view
+            const selected = optList.querySelector('.dd-option.selected');
+            if (selected) selected.scrollIntoView({ block: 'nearest' });
+        }
+    });
+
+    if (searchInput) {
+        searchInput.addEventListener('input', () => _filterDdOptions(optList, searchInput.value));
+        searchInput.addEventListener('click', e => e.stopPropagation());
+    }
+
+    optList.addEventListener('click', (e) => {
+        const opt = e.target.closest('.dd-option');
+        if (!opt) return;
+        const val = opt.dataset.value;
+        sel.value = val;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        trigger.querySelector('.dd-label').textContent = opt.textContent;
+        // Update selected state
+        optList.querySelectorAll('.dd-option').forEach(o => o.classList.toggle('selected', o.dataset.value === val));
+        wrapper.classList.remove('open');
+        _activeDropdown = null;
+    });
+
+    // Store reference for dynamic updates
+    wrapper._ddSelect = sel;
+    wrapper._ddTrigger = trigger;
+    wrapper._ddOptList = optList;
+    sel._ddWrapper = wrapper;
+}
+
+function _renderDdOptions(sel, optList) {
+    optList.innerHTML = '';
+    Array.from(sel.options).forEach(o => {
+        const div = document.createElement('div');
+        div.className = 'dd-option' + (o.selected ? ' selected' : '');
+        div.dataset.value = o.value;
+        div.textContent = o.textContent;
+        optList.appendChild(div);
+    });
+}
+
+function _filterDdOptions(optList, query) {
+    const q = query.toLowerCase();
+    let visible = 0;
+    optList.querySelectorAll('.dd-option').forEach(o => {
+        const match = !q || o.textContent.toLowerCase().includes(q);
+        o.classList.toggle('hidden', !match);
+        if (match) visible++;
+    });
+    // Show/hide empty state
+    let empty = optList.querySelector('.dd-empty');
+    if (visible === 0) {
+        if (!empty) { empty = document.createElement('div'); empty.className = 'dd-empty'; empty.textContent = 'Ничего не найдено'; optList.appendChild(empty); }
+        empty.style.display = '';
+    } else if (empty) {
+        empty.style.display = 'none';
+    }
+}
+
+function _positionPanel(wrapper, trigger, panel) {
+    const rect = trigger.getBoundingClientRect();
+    panel.style.width = Math.max(rect.width, 180) + 'px';
+    // Try below
+    let top = rect.bottom + 4;
+    let left = rect.left;
+    // Clamp right edge
+    if (left + panel.offsetWidth > window.innerWidth - 8) {
+        left = window.innerWidth - panel.offsetWidth - 8;
+    }
+    if (left < 8) left = 8;
+    // If below overflows, show above
+    if (top + 280 > window.innerHeight) {
+        top = Math.max(8, rect.top - Math.min(panel.scrollHeight + 8, 284));
+    }
+    panel.style.top = top + 'px';
+    panel.style.left = left + 'px';
+}
+
+// Refresh a custom dropdown when its <select> options change dynamically
+function refreshCustomDropdown(selectEl) {
+    const wrapper = selectEl._ddWrapper;
+    if (!wrapper) return;
+    _renderDdOptions(selectEl, wrapper._ddOptList);
+    const currentOpt = selectEl.options[selectEl.selectedIndex];
+    wrapper._ddTrigger.querySelector('.dd-label').textContent = currentOpt ? currentOpt.textContent : '';
+}
+
 // --- SPA Logic ---
 
 window.switchSection = (sectionId) => {
@@ -221,6 +406,8 @@ async function loadStores() {
         });
 
         select.onchange = () => filterCompetitors();
+        // Refresh custom dropdown
+        refreshCustomDropdown(select);
     } catch (err) {
         console.error('Stores Load Error:', err);
     }
@@ -373,6 +560,8 @@ function _populateAnalyticsFilters() {
         sel.innerHTML = '<option value="">Все товарные группы</option>' +
             cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
         if (currentVal) sel.value = currentVal; // restore selection
+        // Refresh custom dropdown if initialized
+        refreshCustomDropdown(sel);
     });
     // Populate store checkboxes for Report 1
     const storeDiv = document.getElementById('avgPriceStoreFilter');
@@ -1133,18 +1322,37 @@ function _closeCategoryPopupOutside(e) {
     }
 }
 
+function _positionPopup(popup, anchorEl) {
+    // Position popup near anchor, ensuring it stays on screen
+    const rect = anchorEl.getBoundingClientRect();
+    popup.style.position = 'fixed';
+    // Try below-right first
+    let top = rect.bottom + 6;
+    let left = rect.right - 220;
+    // Clamp left
+    if (left < 8) left = 8;
+    if (left + 240 > window.innerWidth) left = window.innerWidth - 248;
+    // If below would overflow, show above
+    if (top + 280 > window.innerHeight) {
+        top = Math.max(8, rect.top - 286);
+    }
+    popup.style.top = top + 'px';
+    popup.style.left = left + 'px';
+}
+
 async function handleCategoryEdit(btn) {
     const productId = btn.getAttribute('data-id');
     const currentCatId = btn.getAttribute('data-category');
-    const wrapper = btn.closest('.category-edit-wrapper');
 
     // Close any open popup
     closeCategoryPopup();
 
-    // Get categories from filter dropdown (already rendered server-side)
-    const catFilter = document.getElementById('categoryFilter');
-    if (!catFilter) return;
-    const options = Array.from(catFilter.options).filter(o => o.value !== 'all');
+    // Get categories from the hidden original select
+    const catSrc = document.getElementById('categoryFilter');
+    const options = catSrc
+        ? Array.from(catSrc.querySelectorAll('option')).filter(o => o.value !== 'all' && o.value !== '')
+        : [];
+    if (options.length === 0) return;
 
     // Build popup
     const popup = document.createElement('div');
@@ -1153,13 +1361,14 @@ async function handleCategoryEdit(btn) {
         <div class="category-popup-title">Товарная группа</div>
         ${options.map(o => `
             <div class="category-popup-item${String(o.value) === String(currentCatId) ? ' active' : ''}" data-value="${o.value}">
-                ${String(o.value) === String(currentCatId) ? '<i class="fa-solid fa-check" style="font-size:0.7rem;color:var(--primary);"></i> ' : ''}${o.textContent}
+                ${o.textContent}
             </div>
         `).join('')}
     `;
 
-    wrapper.appendChild(popup);
+    document.body.appendChild(popup);
     _activeCategoryPopup = popup;
+    _positionPopup(popup, btn);
 
     // Handle selection
     popup.querySelectorAll('.category-popup-item').forEach(item => {
@@ -1178,7 +1387,6 @@ async function handleCategoryEdit(btn) {
                     body: JSON.stringify({ category_id: parseInt(newCatId) })
                 });
                 if (resp.ok) {
-                    // Update DOM: data attribute, meta text, button data
                     const productItem = btn.closest('.product-item');
                     if (productItem) {
                         productItem.dataset.category = newCatId;
@@ -1590,6 +1798,7 @@ async function handleXmlUpload() {
         if (catFilter) {
             catFilter.innerHTML = '<option value="">Все группы</option>' +
                 Object.entries(xmlCats).map(([id, name]) => `<option value="${id}">${name}</option>`).join('');
+            refreshCustomDropdown(catFilter);
         }
 
         renderXmlPreview();

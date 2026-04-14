@@ -1142,3 +1142,91 @@ window.renderHeatmap = renderHeatmap;
 window.renderTrendReport = renderTrendReport;
 window.renderRiskReport = renderRiskReport;
 window.renderCoverageReport = renderCoverageReport;
+
+// --- PDF Report (client-side) ---
+
+async function generatePdfReport() {
+    const data = await loadAnalyticsData();
+    if (!data) {
+        alert('Не удалось загрузить данные для отчёта');
+        return;
+    }
+
+    const now = new Date().toLocaleString('ru-RU');
+    const riskProducts = data.products
+        .filter(p => p.current_price && p.min_comp_price && p.current_price > p.min_comp_price)
+        .sort((a, b) => (b.current_price - b.min_comp_price) - (a.current_price - a.min_comp_price));
+
+    const total = data.products.length;
+    const atRisk = riskProducts.length;
+    const withMapping = data.products.filter(p => p.has_mapping).length;
+    const withPrice = data.products.filter(p => p.has_price).length;
+
+    let rows = '';
+    for (const p of data.products) {
+        const our = p.current_price ? p.current_price.toLocaleString('ru-RU') : '—';
+        const comp = p.min_comp_price ? p.min_comp_price.toLocaleString('ru-RU') : '—';
+        const diff = (p.current_price && p.min_comp_price) ? Math.round(p.current_price - p.min_comp_price) : null;
+        const diffStr = diff !== null ? (diff > 0 ? '+' + diff.toLocaleString('ru-RU') : diff.toLocaleString('ru-RU')) : '—';
+        const diffColor = diff === null ? '#64748b' : diff > 0 ? '#dc2626' : diff < 0 ? '#16a34a' : '#64748b';
+        const store = p.mappings?.length > 0
+            ? (p.mappings.find(m => m.last_price === p.min_comp_price) || {}).store_name || '—'
+            : '—';
+        rows += `<tr>
+            <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;font-size:12px;">${p.name}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right;font-size:12px;">${p.category_name}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:700;font-size:12px;">${our} &#8381;</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right;font-size:12px;">${comp} &#8381;</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:center;font-size:11px;">${store}</td>
+            <td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:right;font-weight:700;color:${diffColor};font-size:12px;">${diffStr} &#8381;</td>
+        </tr>`;
+    }
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Price Mirror - Отчёт</title>
+<style>
+    @media print {
+        body { margin: 0; padding: 20px; }
+        .no-print { display: none !important; }
+        @page { size: A4 landscape; margin: 15mm; }
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0f172a; background: #fff; padding: 30px; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    .subtitle { color: #64748b; font-size: 13px; margin-bottom: 20px; }
+    .stats { display: flex; gap: 16px; margin-bottom: 24px; }
+    .stat-card { flex: 1; padding: 14px; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .stat-card .label { font-size: 11px; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat-card .value { font-size: 22px; font-weight: 800; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { padding: 8px; text-align: left; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; }
+    .print-btn { position: fixed; top: 20px; right: 20px; padding: 10px 24px; background: #6366f1; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; z-index: 100; }
+</style>
+</head><body>
+<button class="no-print print-btn" onclick="window.print()"><i class="fa-solid fa-print"></i> Печать / Сохранить PDF</button>
+<h1>Price Mirror — Отчёт по ценам</h1>
+<div class="subtitle">Сформирован: ${now} &bull; Аллея Дома (alleyadoma.ru)</div>
+<div class="stats">
+    <div class="stat-card"><div class="label">Всего товаров</div><div class="value">${total}</div></div>
+    <div class="stat-card" style="border-left:3px solid #ef4444;"><div class="label">В зоне риска</div><div class="value" style="color:#ef4444;">${atRisk}</div></div>
+    <div class="stat-card"><div class="label">С привязкой</div><div class="value">${withMapping}</div></div>
+    <div class="stat-card"><div class="label">С ценой конкурента</div><div class="value">${withPrice}</div></div>
+</div>
+<table>
+<thead><tr>
+    <th>Товар</th><th style="text-align:right;">Категория</th><th style="text-align:right;">Наша цена</th>
+    <th style="text-align:right;">Мин. конкурента</th><th style="text-align:center;">Магазин</th><th style="text-align:right;">Разница</th>
+</tr></thead>
+<tbody>${rows}</tbody>
+</table>
+</body></html>`;
+
+    const w = window.open('', '_blank');
+    if (w) {
+        w.document.write(html);
+        w.document.close();
+    } else {
+        alert('Браузер заблокировал всплывающее окно. Разрешите popup для этого сайта.');
+    }
+}
+
+window.generatePdfReport = generatePdfReport;

@@ -615,19 +615,43 @@ async function renderTrendReport() {
     let allDates = new Set();
     let ci = 0;
 
-    // Add "our" average trend
-    if (data.products.length > 0) {
-        const ourByDay = {};
-        for (const p of data.products) {
-            if (productIds && !productIds.has(p.id)) continue;
-            if (!p.current_price) continue;
-            // We don't have daily our-price history, so show as flat line
-        }
-    }
-
     // Build store color lookup
     const storeColorById = {};
     for (const s of data.stores) storeColorById[String(s.id)] = s.color || '#64748b';
+
+    // Add "our" store average as a reference line if we have price history
+    const ourProducts = data.products.filter(p => {
+        if (productIds && !productIds.has(p.id)) return false;
+        return p.current_price;
+    });
+    if (ourProducts.length > 0) {
+        // Collect all dates first to build a flat reference line
+        for (const [sid, sdata] of Object.entries(data.trend)) {
+            Object.keys(sdata.data).forEach(d => allDates.add(d));
+        }
+        const sortedDates = [...allDates].sort();
+        if (sortedDates.length > 0) {
+            const ourAvg = Math.round(ourProducts.reduce((s, p) => s + p.current_price, 0) / ourProducts.length);
+            const ourColor = data.our_store_color || '#6366f1';
+            datasets.push({
+                label: 'Аллея Дома (средняя)',
+                data: sortedDates.map(d => ({ x: d, y: ourAvg })),
+                borderColor: ourColor,
+                backgroundColor: ourColor + '08',
+                borderWidth: 3,
+                borderDash: [8, 4],
+                fill: false,
+                tension: 0,
+                pointRadius: 0,
+                pointHitRadius: 8,
+                pointHoverRadius: 5,
+                pointHoverBackgroundColor: ourColor,
+                pointHoverBorderColor: '#fff',
+                pointHoverBorderWidth: 2,
+                order: 0, // draw on top
+            });
+        }
+    }
 
     for (const [sid, sdata] of Object.entries(data.trend)) {
         const dates = Object.keys(sdata.data);
@@ -638,39 +662,147 @@ async function renderTrendReport() {
             label: sdata.store_name,
             data: dates.map(d => ({ x: d, y: sdata.data[d] })),
             borderColor: color,
-            backgroundColor: color + '15',
-            fill: false,
-            tension: 0.3,
-            pointRadius: 3,
-            pointBorderWidth: 2,
-            pointBackgroundColor: '#fff',
-            pointBorderColor: color,
+            backgroundColor: color + '12',
+            fill: true,
+            borderWidth: 2.5,
+            tension: 0.35,
+            pointRadius: 0,
+            pointHitRadius: 10,
+            pointHoverRadius: 6,
+            pointHoverBackgroundColor: color,
+            pointHoverBorderColor: '#fff',
+            pointHoverBorderWidth: 2,
+            order: 1,
         });
         ci++;
     }
 
     allDates = [...allDates].sort();
 
+    if (datasets.length === 0 || allDates.length === 0) {
+        const canvas = document.getElementById('trendChart');
+        if (canvas) {
+            if (trendChartInstance) trendChartInstance.destroy();
+            trendChartInstance = null;
+            canvas.parentElement.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:3rem;">Нет данных для отображения</p><canvas id="trendChart"></canvas>';
+        }
+        return;
+    }
+
     const canvas = document.getElementById('trendChart');
     if (!canvas) return;
     if (trendChartInstance) trendChartInstance.destroy();
 
+    // Crosshair vertical line plugin (local to this chart)
+    const crosshairPlugin = {
+        id: 'trendCrosshair',
+        afterDraw(chart) {
+            if (chart.tooltip && chart.tooltip._active && chart.tooltip._active.length) {
+                const x = chart.tooltip._active[0].element.x;
+                const yAxis = chart.scales.y;
+                const ctx = chart.ctx;
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(x, yAxis.top);
+                ctx.lineTo(x, yAxis.bottom);
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = '#94a3b8';
+                ctx.setLineDash([4, 4]);
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+    };
+
     trendChartInstance = new Chart(canvas.getContext('2d'), {
         type: 'line',
         data: {
-            labels: allDates.map(d => new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })),
+            labels: allDates.map(d => {
+                const dt = new Date(d);
+                return dt.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
+            }),
             datasets
         },
+        plugins: [crosshairPlugin],
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false,
+            },
+            hover: {
+                mode: 'index',
+                intersect: false,
+            },
+            layout: {
+                padding: { top: 8, right: 12, bottom: 4 }
+            },
             plugins: {
-                legend: { position: 'bottom', labels: { usePointStyle: true, padding: 16, font: { size: 12, weight: '600' } } },
-                tooltip: { backgroundColor: '#1e293b', padding: 12, cornerRadius: 8, mode: 'index', intersect: false }
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 20,
+                        font: { size: 12, weight: '600' },
+                        generateLabels: function(chart) {
+                            return chart.data.datasets.map((ds, i) => ({
+                                text: ds.label,
+                                fillStyle: ds.borderColor,
+                                strokeStyle: ds.borderColor,
+                                lineWidth: ds.borderDash ? 2 : 0,
+                                lineDash: ds.borderDash || [],
+                                pointStyle: ds.borderDash ? 'line' : 'circle',
+                                hidden: !chart.isDatasetVisible(i),
+                                datasetIndex: i,
+                            }));
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                    titleFont: { size: 13, weight: '700' },
+                    bodyFont: { size: 12 },
+                    padding: 14,
+                    cornerRadius: 10,
+                    boxPadding: 6,
+                    usePointStyle: true,
+                    callbacks: {
+                        label: function(ctx) {
+                            const value = ctx.parsed.y;
+                            if (value == null) return null;
+                            return ' ' + ctx.dataset.label + ':  ' + value.toLocaleString('ru-RU') + ' \u20BD';
+                        }
+                    }
+                }
             },
             scales: {
-                y: { ticks: { color: '#64748b', font: { weight: '600' }, callback: v => v.toLocaleString() + ' ₽' }, grid: { color: '#f1f5f9' } },
-                x: { ticks: { color: '#64748b', font: { weight: '600' } }, grid: { display: false } }
+                y: {
+                    beginAtZero: false,
+                    ticks: {
+                        color: '#64748b',
+                        font: { weight: '600', size: 11 },
+                        callback: v => v.toLocaleString('ru-RU') + ' \u20BD',
+                        maxTicksLimit: 8,
+                    },
+                    grid: {
+                        color: '#f1f5f9',
+                        drawBorder: false,
+                    },
+                    border: { display: false },
+                },
+                x: {
+                    ticks: {
+                        color: '#64748b',
+                        font: { weight: '600', size: 11 },
+                        maxRotation: 0,
+                        autoSkip: true,
+                        maxTicksLimit: 15,
+                    },
+                    grid: { display: false },
+                    border: { display: false },
+                }
             }
         }
     });

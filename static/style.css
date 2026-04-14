@@ -677,7 +677,7 @@ input[type="checkbox"] {
    CHART CONTAINER
    ================================================================ */
 .chart-container { position: relative; min-height: 350px; }
-.chart-container--tall { height: 400px; }
+.chart-container--tall { height: 500px; }
 
 /* ================================================================
    COVERAGE GRID

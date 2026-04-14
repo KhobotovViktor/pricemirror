@@ -492,10 +492,10 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
 .product-thumb i { font-size: 1.125rem; color: var(--text-tertiary); }
 
 .product-info { flex: 1; min-width: 0; }
-.product-name { font-weight: 700; font-size: 0.9375rem; color: var(--text-primary); }
-.product-meta { font-size: 0.75rem; color: var(--text-secondary); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+.product-name { font-weight: 700; font-size: 0.9375rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.product-meta { font-size: 0.75rem; color: var(--text-secondary); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.product-price-col { text-align: right; margin-right: 16px; }
+.product-price-col { text-align: right; margin-right: 16px; flex-shrink: 0; }
 
 .price { font-weight: 700; color: var(--primary); font-size: 1.0625rem; white-space: nowrap; }
 
@@ -971,8 +971,71 @@ input[type="checkbox"] {
 
     .report-tabs { flex-wrap: nowrap; overflow-x: auto; }
 
-    .product-item { flex-wrap: wrap; gap: 8px; padding: 12px; }
-    .product-price-col { text-align: left; margin-right: 0; }
+    .product-item {
+        display: grid;
+        grid-template-columns: auto 44px 1fr auto;
+        grid-template-rows: auto auto;
+        gap: 4px 10px;
+        padding: 12px;
+        align-items: center;
+    }
+    /* Row 1: checkbox | thumb | info (spanning col 3-4) */
+    .product-item > input[type="checkbox"] {
+        grid-row: 1;
+        grid-column: 1;
+    }
+    .product-item > .product-thumb {
+        grid-row: 1;
+        grid-column: 2;
+        width: 44px;
+        height: 44px;
+    }
+    .product-item > .product-info {
+        grid-row: 1;
+        grid-column: 3 / 5;
+        min-width: 0;
+    }
+    .product-item > .product-info .product-name {
+        font-size: 0.85rem;
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .product-item > .product-info .product-meta {
+        font-size: 0.68rem;
+        margin-top: 2px;
+    }
+    /* Row 2: price on left, actions on right */
+    .product-item > .product-price-col {
+        grid-row: 2;
+        grid-column: 2 / 4;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        text-align: left;
+        margin-right: 0;
+    }
+    .product-item > .product-price-col .price {
+        font-size: 0.95rem;
+    }
+    .product-item > .product-price-col .badge {
+        font-size: 0.65rem;
+        padding: 2px 6px;
+    }
+    .product-item > .product-actions {
+        grid-row: 2;
+        grid-column: 4;
+        justify-self: end;
+        display: flex;
+        gap: 4px;
+    }
+    .product-item > .product-actions .btn-icon.sm {
+        width: 30px;
+        height: 30px;
+        font-size: 0.75rem;
+    }
 
     .analytics-modal { inset: 0; border-radius: 0; padding: 20px; }
     .price-cards { grid-template-columns: 1fr; }
@@ -994,6 +1057,56 @@ input[type="checkbox"] {
     .grid-4 { grid-template-columns: 1fr; }
     .price { font-size: 0.9375rem; }
     .stat-value { font-size: 1.375rem; }
+
+    .product-item {
+        grid-template-columns: 40px 1fr auto;
+        gap: 3px 8px;
+        padding: 10px;
+    }
+    .product-item > input[type="checkbox"] {
+        display: none;
+    }
+    .product-item > .product-thumb {
+        grid-row: 1;
+        grid-column: 1;
+        width: 40px;
+        height: 40px;
+    }
+    .product-item > .product-info {
+        grid-row: 1;
+        grid-column: 2 / 4;
+    }
+    .product-item > .product-info .product-name {
+        font-size: 0.8rem;
+    }
+    .product-item > .product-info .product-meta {
+        font-size: 0.62rem;
+    }
+    .product-item > .product-price-col {
+        grid-row: 2;
+        grid-column: 1 / 3;
+    }
+    .product-item > .product-price-col .price {
+        font-size: 0.875rem;
+    }
+    .product-item > .product-actions {
+        grid-row: 2;
+        grid-column: 3;
+    }
+    .product-item > .product-actions .btn-icon.sm {
+        width: 28px;
+        height: 28px;
+        font-size: 0.7rem;
+    }
+    .category-popup {
+        position: fixed;
+        right: 8px;
+        left: 8px;
+        top: auto;
+        bottom: 8px;
+        min-width: auto;
+        max-height: 50vh;
+    }
 }
 
 /* ================================================================

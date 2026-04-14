@@ -173,25 +173,19 @@
                         <div class="filter-bar">
                             <h2 class="flex-shrink-0" style="font-size:1.125rem;font-weight:700">Каталог товаров</h2>
                             <div class="filter-group">
-                                <div class="form-input-icon">
-                                    <i class="fa-solid fa-layer-group"></i>
-                                    <select class="form-select" id="categoryFilter" style="min-width:180px">
-                                        <option value="all">Все товарные группы</option>
-                                        {% for cat in categories %}
-                                        <option value="{{ cat.id }}">{{ cat.name }}</option>
-                                        {% endfor %}
-                                    </select>
-                                </div>
-                                <div class="form-input-icon">
-                                    <i class="fa-solid fa-tag"></i>
-                                    <select class="form-select" id="statusFilter" onchange="handleProductFilter()" style="min-width:160px">
+                                <select class="form-select" id="categoryFilter" style="min-width:180px">
+                                    <option value="all">Все товарные группы</option>
+                                    {% for cat in categories %}
+                                    <option value="{{ cat.id }}">{{ cat.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <select class="form-select" id="statusFilter" onchange="handleProductFilter()" style="min-width:160px">
                                         <option value="all">Все статусы</option>
                                         <option value="success">Цена ниже</option>
                                         <option value="warning">Цена равна</option>
                                         <option value="danger">Цена выше</option>
                                         <option value="neutral">Ожидание</option>
                                     </select>
-                                </div>
                                 <div class="form-input-icon" style="min-width:240px">
                                     <i class="fa-solid fa-search"></i>
                                     <input class="form-input" type="text" id="catalogSearch" placeholder="Поиск по названию...">

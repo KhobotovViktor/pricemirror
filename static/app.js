@@ -222,11 +222,10 @@ function _buildCustomDropdown(sel) {
     sel.parentNode.insertBefore(wrapper, sel);
     wrapper.appendChild(sel); // move select inside wrapper
 
-    // If was inside form-input-icon, move icon styling
+    // If was inside form-input-icon, hide the absolute-positioned icon
     if (iconWrapper) {
-        const icon = iconWrapper.querySelector('i:first-child');
+        const icon = iconWrapper.querySelector(':scope > i');
         if (icon) {
-            trigger.insertBefore(icon.cloneNode(true), trigger.firstChild);
             icon.style.display = 'none';
         }
     }

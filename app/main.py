@@ -5,7 +5,7 @@ import asyncio
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from fastapi import FastAPI, Depends, HTTPException, Request, Form, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, BackgroundTasks, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -328,6 +328,120 @@ async def add_product(
         return result.data[0] if result.data else {"status": "ok"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/products/import-xml")
+async def import_products_from_xml(
+    file: UploadFile = File(...),
+    user_id: str = Depends(get_current_user)
+):
+    """Import products from YML/XML catalog file (Yandex Market format).
+    Extracts name and URL from each <offer>. Price is updated by scraper separately."""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    
+    import xml.etree.ElementTree as ET
+    
+    try:
+        content = await file.read()
+        root = ET.fromstring(content)
+        
+        # Parse categories from XML  
+        xml_categories = {}
+        for cat_el in root.iter('category'):
+            cat_id = cat_el.get('id')
+            cat_name = (cat_el.text or '').strip()
+            if cat_id and cat_name:
+                xml_categories[cat_id] = cat_name
+        
+        # Parse offers
+        offers = []
+        for offer in root.iter('offer'):
+            name_el = offer.find('name')
+            url_el = offer.find('url')
+            cat_id_el = offer.find('categoryId')
+            
+            name = name_el.text.strip() if name_el is not None and name_el.text else None
+            url = url_el.text.strip() if url_el is not None and url_el.text else None
+            xml_cat_id = cat_id_el.text.strip() if cat_id_el is not None and cat_id_el.text else None
+            xml_cat_name = xml_categories.get(xml_cat_id, '') if xml_cat_id else ''
+            
+            if name and url:
+                offers.append({
+                    "name": name,
+                    "url": url,
+                    "xml_category_id": xml_cat_id,
+                    "xml_category_name": xml_cat_name,
+                })
+        
+        return {"status": "success", "offers": offers, "total": len(offers)}
+    except ET.ParseError as e:
+        raise HTTPException(status_code=400, detail=f"Ошибка парсинга XML: {str(e)}")
+    except Exception as e:
+        print(f"XML IMPORT ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/products/import-xml/confirm")
+async def confirm_xml_import(
+    data: dict,
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(get_current_user)
+):
+    """Confirm import of selected products from XML preview.
+    Expects: { products: [{ name, url, category_id }], skip_duplicates: bool }"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    
+    products = data.get("products", [])
+    skip_duplicates = data.get("skip_duplicates", True)
+    
+    if not products:
+        raise HTTPException(status_code=400, detail="Нет товаров для импорта")
+    
+    try:
+        # Get existing URLs to check duplicates
+        existing = supabase.table("our_product").select("url").execute().data
+        existing_urls = set(p['url'] for p in existing if p.get('url'))
+        
+        imported = 0
+        skipped = 0
+        
+        for p in products:
+            url = p.get("url", "").strip()
+            name = p.get("name", "").strip()
+            category_id = p.get("category_id")
+            
+            if not name or not url:
+                skipped += 1
+                continue
+                
+            if skip_duplicates and url in existing_urls:
+                skipped += 1
+                continue
+            
+            insert_data = {
+                "name": name,
+                "url": url,
+                "category_id": category_id,
+            }
+            
+            result = supabase.table("our_product").insert(insert_data).execute()
+            if result.data:
+                existing_urls.add(url)
+                imported += 1
+                # Trigger background price scrape for the new product
+                if SCRAPER_AVAILABLE and "alleyadoma.ru" in url:
+                    product_id = result.data[0]['id']
+                    background_tasks.add_task(scrape_our_product_price, product_id)
+        
+        return {
+            "status": "success",
+            "imported": imported,
+            "skipped": skipped,
+            "message": f"Импортировано: {imported}, пропущено: {skipped}"
+        }
+    except Exception as e:
+        print(f"XML IMPORT CONFIRM ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/scrape/preview")
 async def preview_price(url: str, user_id: str = Depends(get_current_user)):

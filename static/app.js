@@ -1547,6 +1547,182 @@ window.renderCoverageReport = renderCoverageReport;
 window.saveStoreColor = saveStoreColor;
 window.saveOurStoreColor = saveOurStoreColor;
 
+// --- XML Import ---
+
+let _xmlParsedOffers = []; // parsed from server
+
+async function handleXmlUpload() {
+    const fileInput = document.getElementById('xmlFileInput');
+    const statusDiv = document.getElementById('xmlUploadStatus');
+    if (!fileInput || !fileInput.files.length) {
+        if (statusDiv) statusDiv.innerHTML = '<span style="color:var(--danger);">Выберите XML-файл</span>';
+        return;
+    }
+
+    const btn = document.getElementById('xmlUploadBtn');
+    if (btn) btn.disabled = true;
+    if (statusDiv) statusDiv.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Загрузка...';
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    try {
+        const resp = await fetch('/api/products/import-xml', {
+            method: 'POST',
+            credentials: 'include',
+            body: formData
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            if (statusDiv) statusDiv.innerHTML = `<span style="color:var(--danger);">${data.detail || 'Ошибка'}</span>`;
+            return;
+        }
+
+        _xmlParsedOffers = data.offers || [];
+        if (statusDiv) statusDiv.innerHTML = `<span style="color:var(--success);">Найдено товаров: ${_xmlParsedOffers.length}</span>`;
+
+        // Populate XML category filter
+        const xmlCats = {};
+        for (const o of _xmlParsedOffers) {
+            if (o.xml_category_name) xmlCats[o.xml_category_id] = o.xml_category_name;
+        }
+        const catFilter = document.getElementById('xmlCategoryFilter');
+        if (catFilter) {
+            catFilter.innerHTML = '<option value="">Все группы</option>' +
+                Object.entries(xmlCats).map(([id, name]) => `<option value="${id}">${name}</option>`).join('');
+        }
+
+        renderXmlPreview();
+        document.getElementById('xmlImportModal').style.display = 'flex';
+    } catch (e) {
+        if (statusDiv) statusDiv.innerHTML = `<span style="color:var(--danger);">Ошибка: ${e.message}</span>`;
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+function renderXmlPreview() {
+    const container = document.getElementById('xmlPreviewList');
+    if (!container) return;
+
+    if (_xmlParsedOffers.length === 0) {
+        container.innerHTML = '<p style="text-align:center;padding:2rem;color:var(--text-muted);">Нет товаров</p>';
+        updateXmlSelectedCount();
+        return;
+    }
+
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
+    html += '<thead><tr style="border-bottom:2px solid var(--border-soft);position:sticky;top:0;background:var(--bg-card);z-index:1;">';
+    html += '<th style="padding:8px;width:30px;"></th>';
+    html += '<th style="padding:8px;text-align:left;">Название</th>';
+    html += '<th style="padding:8px;text-align:left;min-width:120px;">Группа (XML)</th>';
+    html += '</tr></thead><tbody>';
+
+    for (let i = 0; i < _xmlParsedOffers.length; i++) {
+        const o = _xmlParsedOffers[i];
+        html += `<tr class="xml-offer-row" data-index="${i}" data-xml-cat="${o.xml_category_id || ''}" data-name="${(o.name || '').toLowerCase()}" style="border-bottom:1px solid var(--border-soft);">`;
+        html += `<td style="padding:6px 8px;"><input type="checkbox" class="xml-offer-checkbox" data-index="${i}" checked onchange="updateXmlSelectedCount()"></td>`;
+        html += `<td style="padding:6px 8px;font-weight:600;" title="${o.url}">${o.name}</td>`;
+        html += `<td style="padding:6px 8px;font-size:0.75rem;color:var(--text-muted);">${o.xml_category_name || '—'}</td>`;
+        html += '</tr>';
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    updateXmlSelectedCount();
+}
+
+function filterXmlPreview() {
+    const catVal = document.getElementById('xmlCategoryFilter')?.value || '';
+    const searchVal = (document.getElementById('xmlSearchFilter')?.value || '').toLowerCase();
+
+    document.querySelectorAll('.xml-offer-row').forEach(row => {
+        const matchesCat = !catVal || row.dataset.xmlCat === catVal;
+        const matchesSearch = !searchVal || row.dataset.name.includes(searchVal);
+        row.style.display = (matchesCat && matchesSearch) ? '' : 'none';
+    });
+}
+
+function toggleXmlSelectAll(checked) {
+    document.querySelectorAll('.xml-offer-row').forEach(row => {
+        if (row.style.display !== 'none') {
+            const cb = row.querySelector('.xml-offer-checkbox');
+            if (cb) cb.checked = checked;
+        }
+    });
+    updateXmlSelectedCount();
+}
+
+function updateXmlSelectedCount() {
+    const total = document.querySelectorAll('.xml-offer-row:not([style*="display: none"])').length;
+    const checked = document.querySelectorAll('.xml-offer-row:not([style*="display: none"]) .xml-offer-checkbox:checked').length;
+    const counter = document.getElementById('xmlSelectedCount');
+    if (counter) counter.textContent = `${checked} из ${total}`;
+}
+
+function closeXmlImportModal() {
+    document.getElementById('xmlImportModal').style.display = 'none';
+    const resultDiv = document.getElementById('xmlImportResultStatus');
+    if (resultDiv) resultDiv.innerHTML = '';
+}
+
+async function confirmXmlImport() {
+    const categoryId = parseInt(document.getElementById('xmlImportCategorySelect')?.value);
+    const skipDuplicates = document.getElementById('xmlSkipDuplicates')?.checked ?? true;
+    const btn = document.getElementById('xmlConfirmBtn');
+    const resultDiv = document.getElementById('xmlImportResultStatus');
+
+    // Collect selected indices
+    const selectedProducts = [];
+    document.querySelectorAll('.xml-offer-checkbox:checked').forEach(cb => {
+        const idx = parseInt(cb.dataset.index);
+        const offer = _xmlParsedOffers[idx];
+        if (offer) {
+            selectedProducts.push({
+                name: offer.name,
+                url: offer.url,
+                category_id: categoryId
+            });
+        }
+    });
+
+    if (selectedProducts.length === 0) {
+        if (resultDiv) resultDiv.innerHTML = '<span style="color:var(--danger);">Не выбрано ни одного товара</span>';
+        return;
+    }
+
+    if (btn) btn.disabled = true;
+    if (resultDiv) resultDiv.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Импорт ${selectedProducts.length} товаров...`;
+
+    try {
+        const resp = await fetch('/api/products/import-xml/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ products: selectedProducts, skip_duplicates: skipDuplicates })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            if (resultDiv) resultDiv.innerHTML = `<span style="color:var(--success);font-weight:700;"><i class="fa-solid fa-check-circle"></i> ${data.message}</span>`;
+            // Reload page after short delay to show new products
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            if (resultDiv) resultDiv.innerHTML = `<span style="color:var(--danger);">${data.detail || 'Ошибка'}</span>`;
+        }
+    } catch (e) {
+        if (resultDiv) resultDiv.innerHTML = `<span style="color:var(--danger);">Ошибка: ${e.message}</span>`;
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+window.handleXmlUpload = handleXmlUpload;
+window.filterXmlPreview = filterXmlPreview;
+window.toggleXmlSelectAll = toggleXmlSelectAll;
+window.updateXmlSelectedCount = updateXmlSelectedCount;
+window.closeXmlImportModal = closeXmlImportModal;
+window.confirmXmlImport = confirmXmlImport;
+
 // --- Mobile Sidebar ---
 
 window.toggleMobileSidebar = () => {

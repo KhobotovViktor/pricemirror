@@ -479,7 +479,6 @@ async function loadCompetitorProducts() {
             
             div.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 1rem; flex-grow: 1;">
-                    <input type="checkbox" class="competitor-checkbox" data-id="${item.id}" onclick="event.stopPropagation(); window.updateCompetitorBatchBar();" style="width: 1.15rem; height: 1.15rem; cursor: pointer; accent-color: var(--primary);">
                     <div>
                         <div style="font-weight: 700; color: var(--text-main);">${item.our_product_name}</div>
                         <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">
@@ -491,18 +490,14 @@ async function loadCompetitorProducts() {
                     <div class="price" style="color: var(--text-muted); font-size: 0.9rem; font-weight: 500;">Наш: ${item.our_price.toLocaleString()} ₽</div>
                     <div class="price">${item.competitor_price ? item.competitor_price.toLocaleString() + ' ₽' : 'Сбор...'}</div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 0.75rem; width: 160px; justify-content: flex-end;">
+                <div style="display: flex; align-items: center; gap: 0.75rem; min-width: 100px; justify-content: flex-end;">
                      <div class="status-pill ${item.competitor_price ? diffClass : ''}" style="min-width: 100px; justify-content: center; ${!item.competitor_price ? 'opacity: 0.5;' : ''}">
                         ${item.competitor_price ? (diff > 0 ? '+' : '') + diff.toLocaleString() + ' ₽' : 'Ожидание'}
                     </div>
-                    <button class="secondary refresh-mapping-btn" onclick="refreshMapping(${item.id}, this)" title="Обновить цену" style="padding: 0.5rem; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;">
-                        <i class="fa-solid fa-rotate"></i>
-                    </button>
                 </div>
             `;
             listContainer.appendChild(div);
         });
-        window.updateCompetitorBatchBar();
     } catch (err) {
         console.error('Competitor Load Error:', err);
         listContainer.innerHTML = '<p style="text-align: center; padding: 3rem; color: var(--danger);">Ошибка при загрузке данных мониторинга</p>';

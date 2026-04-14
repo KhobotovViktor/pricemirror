@@ -1116,6 +1116,93 @@ window.handleBatchDelete = async () => {
 }
 // --- Product Actions ---
 
+// Category change popup
+let _activeCategoryPopup = null;
+
+function closeCategoryPopup() {
+    if (_activeCategoryPopup) {
+        _activeCategoryPopup.remove();
+        _activeCategoryPopup = null;
+    }
+    document.removeEventListener('click', _closeCategoryPopupOutside);
+}
+
+function _closeCategoryPopupOutside(e) {
+    if (_activeCategoryPopup && !_activeCategoryPopup.contains(e.target) && !e.target.closest('.category-edit-wrapper button')) {
+        closeCategoryPopup();
+    }
+}
+
+async function handleCategoryEdit(btn) {
+    const productId = btn.getAttribute('data-id');
+    const currentCatId = btn.getAttribute('data-category');
+    const wrapper = btn.closest('.category-edit-wrapper');
+
+    // Close any open popup
+    closeCategoryPopup();
+
+    // Get categories from filter dropdown (already rendered server-side)
+    const catFilter = document.getElementById('categoryFilter');
+    if (!catFilter) return;
+    const options = Array.from(catFilter.options).filter(o => o.value !== 'all');
+
+    // Build popup
+    const popup = document.createElement('div');
+    popup.className = 'category-popup';
+    popup.innerHTML = `
+        <div class="category-popup-title">Товарная группа</div>
+        ${options.map(o => `
+            <div class="category-popup-item${String(o.value) === String(currentCatId) ? ' active' : ''}" data-value="${o.value}">
+                ${String(o.value) === String(currentCatId) ? '<i class="fa-solid fa-check" style="font-size:0.7rem;color:var(--primary);"></i> ' : ''}${o.textContent}
+            </div>
+        `).join('')}
+    `;
+
+    wrapper.appendChild(popup);
+    _activeCategoryPopup = popup;
+
+    // Handle selection
+    popup.querySelectorAll('.category-popup-item').forEach(item => {
+        item.addEventListener('click', async () => {
+            const newCatId = item.dataset.value;
+            if (String(newCatId) === String(currentCatId)) {
+                closeCategoryPopup();
+                return;
+            }
+            closeCategoryPopup();
+            try {
+                const resp = await fetch(`/api/products/${productId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ category_id: parseInt(newCatId) })
+                });
+                if (resp.ok) {
+                    // Update DOM: data attribute, meta text, button data
+                    const productItem = btn.closest('.product-item');
+                    if (productItem) {
+                        productItem.dataset.category = newCatId;
+                        const newName = options.find(o => o.value === newCatId)?.textContent || '';
+                        const meta = productItem.querySelector('.product-meta');
+                        if (meta) {
+                            meta.innerHTML = meta.innerHTML.replace(/^[^&]*&bull;/, newName + ' &bull;');
+                        }
+                    }
+                    btn.setAttribute('data-category', newCatId);
+                } else {
+                    const err = await resp.json();
+                    alert('Ошибка: ' + (err.detail || 'Не удалось обновить'));
+                }
+            } catch (e) {
+                alert('Ошибка сети: ' + e.message);
+            }
+        });
+    });
+
+    // Close on outside click (delayed to avoid immediate trigger)
+    setTimeout(() => document.addEventListener('click', _closeCategoryPopupOutside), 10);
+}
+
 async function deleteProductById(btn) {
     const id = btn.getAttribute('data-id');
     const name = btn.getAttribute('data-name');
@@ -1442,6 +1529,7 @@ async function saveOurStoreColor() {
 // Bridge functions
 window.handleAnalytics = (btn) => displayProductAnalytics(btn.getAttribute('data-id'));
 window.handleDelete = (btn) => deleteProductById(btn);
+window.handleCategoryEdit = handleCategoryEdit;
 window.closeAnalytics = () => {
     const s = document.getElementById('analyticsSection');
     const o = document.getElementById('modalOverlay');

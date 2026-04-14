@@ -200,6 +200,11 @@
                                     </div>
                                 </div>
                                 <div class="product-actions">
+                                    <div class="category-edit-wrapper" style="position:relative">
+                                        <button data-id="{{ prod.id }}" data-category="{{ prod.category_id }}" onclick="handleCategoryEdit(this)" class="btn btn-secondary btn-icon sm" title="Изменить товарную группу">
+                                            <i class="fa-solid fa-layer-group"></i>
+                                        </button>
+                                    </div>
                                     <button data-id="{{ prod.id }}" onclick="handleAnalytics(this)" class="btn btn-secondary btn-icon sm" title="Аналитика">
                                         <i class="fa-solid fa-chart-simple"></i>
                                     </button>

@@ -38,17 +38,18 @@ class PriceNotifier:
             print(f"TELEGRAM EXCEPTION: {e}")
 
     @classmethod
-    def send_bitrix24(cls, product_name: str, old_price, new_price, store_name: str):
-        """Forward price alert to Bitrix24 group chat (if configured)."""
+    def _send_bitrix24_message(cls, bb_message: str):
+        """Forward a BB-code message to Bitrix24 group chat (if configured)."""
         try:
             from .bitrix24 import bitrix24
-            bitrix24.send_price_alert(product_name, old_price, new_price, store_name)
+            bitrix24.send_message(bb_message)
         except Exception as e:
             print(f"BITRIX24 NOTIFY ERROR: {e}")
 
     @classmethod
     def send_price_alert(cls, product_name, old_price, new_price, store_name):
-        # 1. Telegram notification (HTML)
+        """Alert: competitor price dropped BELOW our price."""
+        # 1. Telegram (HTML)
         msg = (
             "\U0001f4c9 <b>\u0421\u043d\u0438\u0436\u0435\u043d\u0438\u0435 \u0446\u0435\u043d\u044b!</b>\n"
             f"\u0422\u043e\u0432\u0430\u0440: <i>{product_name}</i>\n"
@@ -58,8 +59,40 @@ class PriceNotifier:
         )
         cls.send_telegram(msg)
 
-        # 2. Bitrix24 notification (BB-code) — runs independently
-        cls.send_bitrix24(product_name, old_price, new_price, store_name)
+        # 2. Bitrix24 (BB-code)
+        bb = (
+            f"[B]\u0421\u043d\u0438\u0436\u0435\u043d\u0438\u0435 \u0446\u0435\u043d\u044b \u043a\u043e\u043d\u043a\u0443\u0440\u0435\u043d\u0442\u0430![/B]\n"
+            f"\u0422\u043e\u0432\u0430\u0440: [I]{product_name}[/I]\n"
+            f"\u041c\u0430\u0433\u0430\u0437\u0438\u043d: [B]{store_name}[/B]\n"
+            f"\u0421\u0442\u0430\u0440\u0430\u044f \u0446\u0435\u043d\u0430: {old_price} \u0440\u0443\u0431.\n"
+            f"\u041d\u043e\u0432\u0430\u044f \u0446\u0435\u043d\u0430: [B]{new_price} \u0440\u0443\u0431.[/B]"
+        )
+        cls._send_bitrix24_message(bb)
+
+    @classmethod
+    def send_price_increase_alert(cls, product_name, old_price, new_price, store_name):
+        """Alert: competitor raised their price — opportunity to increase margin."""
+        pct = round((new_price - old_price) / old_price * 100, 1) if old_price else 0
+
+        # 1. Telegram (HTML)
+        msg = (
+            "\U0001f4c8 <b>\u0420\u043e\u0441\u0442 \u0446\u0435\u043d\u044b \u043a\u043e\u043d\u043a\u0443\u0440\u0435\u043d\u0442\u0430!</b>\n"
+            f"\u0422\u043e\u0432\u0430\u0440: <i>{product_name}</i>\n"
+            f"\u041c\u0430\u0433\u0430\u0437\u0438\u043d: <b>{store_name}</b>\n"
+            f"\u0411\u044b\u043b\u0430: {old_price} \u20bd \u2192 \u0421\u0442\u0430\u043b\u0430: <b>{new_price} \u20bd</b> (+{pct}%)\n"
+            f"\u0412\u043e\u0437\u043c\u043e\u0436\u043d\u043e\u0441\u0442\u044c \u0443\u0432\u0435\u043b\u0438\u0447\u0438\u0442\u044c \u043c\u0430\u0440\u0436\u0443!"
+        )
+        cls.send_telegram(msg)
+
+        # 2. Bitrix24 (BB-code)
+        bb = (
+            f"[B]\u0420\u043e\u0441\u0442 \u0446\u0435\u043d\u044b \u043a\u043e\u043d\u043a\u0443\u0440\u0435\u043d\u0442\u0430![/B]\n"
+            f"\u0422\u043e\u0432\u0430\u0440: [I]{product_name}[/I]\n"
+            f"\u041c\u0430\u0433\u0430\u0437\u0438\u043d: [B]{store_name}[/B]\n"
+            f"\u0411\u044b\u043b\u0430: {old_price} \u0440\u0443\u0431. -> \u0421\u0442\u0430\u043b\u0430: [B]{new_price} \u0440\u0443\u0431.[/B] (+{pct}%)\n"
+            f"\u0412\u043e\u0437\u043c\u043e\u0436\u043d\u043e\u0441\u0442\u044c \u0443\u0432\u0435\u043b\u0438\u0447\u0438\u0442\u044c \u043c\u0430\u0440\u0436\u0443!"
+        )
+        cls._send_bitrix24_message(bb)
 
 # Export for use in other modules
 notifier = PriceNotifier

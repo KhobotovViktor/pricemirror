@@ -387,6 +387,15 @@ async def scrape_for_product(product_id: int):
         if our_details['price']:
             update_data["current_price"] = our_details['price']
             print(f"Updated OUR price: {our_details['price']}")
+            # Record our price history
+            try:
+                supabase.table("our_price_history").insert({
+                    "product_id": product_id,
+                    "price": our_details['price'],
+                    "created_at": datetime.utcnow().isoformat()
+                }).execute()
+            except Exception as hist_err:
+                print(f"[OurPriceHistory] Insert error: {hist_err}")
         
         if our_details['image_url']:
             update_data["image_url"] = our_details['image_url']
@@ -425,12 +434,14 @@ async def scrape_specific_mapping(mapping_id: int):
                 "price": details['price']
             }).execute()
 
+            old_last_price = float(mapping.get('last_price')) if mapping.get('last_price') else None
+
             supabase.table("competitor_product").update({
                 "last_price": details['price'],
                 "last_scrape": datetime.utcnow().isoformat()
             }).eq("id", mapping_id).execute()
 
-            # 4. Alert if price changed significantly
+            # 4. Alert on significant price changes
             our_price = float(mapping['our_product']['current_price']) if mapping['our_product'].get('current_price') else 0
             if our_price > details['price']:
                 notifier.send_price_alert(
@@ -439,6 +450,16 @@ async def scrape_specific_mapping(mapping_id: int):
                     details['price'],
                     mapping['url']
                 )
+            # 4b. Alert on competitor price INCREASE (>5% rise = margin opportunity)
+            if old_last_price and details['price'] > old_last_price:
+                increase_pct = (details['price'] - old_last_price) / old_last_price * 100
+                if increase_pct >= 5:
+                    notifier.send_price_increase_alert(
+                        mapping['our_product']['name'],
+                        old_last_price,
+                        details['price'],
+                        mapping['url']
+                    )
         return True
     except Exception as e:
         print(f"Error scraping mapping {mapping_id}: {e}")
@@ -463,6 +484,15 @@ async def scrape_our_product_price(product_id: int):
                 update_data["image_url"] = details['image_url']
             
             supabase.table("our_product").update(update_data).eq("id", product_id).execute()
+            # Record our price history
+            try:
+                supabase.table("our_price_history").insert({
+                    "product_id": product_id,
+                    "price": details['price'],
+                    "created_at": datetime.utcnow().isoformat()
+                }).execute()
+            except Exception as hist_err:
+                print(f"[OurPriceHistory] Insert error: {hist_err}")
             print(f"[Our Product] Successfully updated price to {details['price']} for '{product['name']}'")
             return True
         else:
@@ -493,6 +523,9 @@ async def _scrape_mapping_safe(cm: dict, our_prod: dict):
             "price": details['price'],
             "created_at": datetime.utcnow().isoformat()
         }).execute()
+
+        old_last_price = float(cm['last_price']) if cm.get('last_price') else None
+
         supabase.table("competitor_product").update({
             "last_price": details['price'],
             "last_scrape": datetime.utcnow().isoformat()
@@ -500,6 +533,12 @@ async def _scrape_mapping_safe(cm: dict, our_prod: dict):
 
         if our_prod.get('current_price') and details['price'] < float(our_prod['current_price']):
             notifier.send_price_alert(our_prod['name'], our_prod['current_price'], details['price'], cm['url'])
+
+        # Alert on competitor price INCREASE (>5% rise = margin opportunity)
+        if old_last_price and details['price'] > old_last_price:
+            increase_pct = (details['price'] - old_last_price) / old_last_price * 100
+            if increase_pct >= 5:
+                notifier.send_price_increase_alert(our_prod['name'], old_last_price, details['price'], cm['url'])
 
 
 async def monitor_all():

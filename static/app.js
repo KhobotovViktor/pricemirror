@@ -1025,16 +1025,61 @@ function renderChart(data) {
         ci++;
     }
 
-    // Add "Наша цена" as dashed line
-    datasets.push({
-        label: 'Наша цена',
-        data: labels.map(() => data.our_product.current_price),
-        borderColor: ourColor,
-        borderDash: [8, 4],
-        pointRadius: 0,
-        fill: false,
-        borderWidth: 2
-    });
+    // Add "Наша цена" — historical data if available, flat line otherwise
+    const ourPriceHistory = data.our_price_history || [];
+    if (ourPriceHistory.length > 0) {
+        // Build day→price map from our history
+        const ourDayPrices = {};
+        for (const r of ourPriceHistory) {
+            const day = new Date(r.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+            ourDayPrices[day] = r.price; // latest wins per day
+        }
+        // Also ensure all our history dates are in the labels
+        for (const r of ourPriceHistory) {
+            const day = new Date(r.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+            if (!allDates.has(day)) allDates.add(day);
+        }
+        // Re-sort labels after adding our dates
+        const sortedLabels = [...allDates].sort((a, b) => {
+            const [dA, mA] = a.split('.').map(Number);
+            const [dB, mB] = b.split('.').map(Number);
+            return (mA - mB) || (dA - dB);
+        });
+        // Rebuild labels array in-place
+        labels.length = 0;
+        sortedLabels.forEach(l => labels.push(l));
+
+        // Forward-fill our prices (carry last known value)
+        let lastKnown = data.our_product.current_price;
+        const ourData = labels.map(d => {
+            if (ourDayPrices[d] !== undefined) lastKnown = ourDayPrices[d];
+            return lastKnown;
+        });
+        datasets.push({
+            label: 'Наша цена (Аллея Дома)',
+            data: ourData,
+            borderColor: ourColor,
+            backgroundColor: ourColor + '10',
+            fill: false,
+            tension: 0.4,
+            pointRadius: 3,
+            pointBackgroundColor: '#ffffff',
+            pointBorderColor: ourColor,
+            pointBorderWidth: 2,
+            borderWidth: 2.5,
+        });
+    } else {
+        // Flat dashed line fallback
+        datasets.push({
+            label: 'Наша цена',
+            data: labels.map(() => data.our_product.current_price),
+            borderColor: ourColor,
+            borderDash: [8, 4],
+            pointRadius: 0,
+            fill: false,
+            borderWidth: 2
+        });
+    }
 
     priceChart = new Chart(ctx, {
         type: 'line',
@@ -1201,6 +1246,42 @@ window.renderRiskReport = renderRiskReport;
 window.renderCoverageReport = renderCoverageReport;
 window.saveStoreColor = saveStoreColor;
 window.saveOurStoreColor = saveOurStoreColor;
+
+// --- Mobile Sidebar ---
+
+window.toggleMobileSidebar = () => {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const burger = document.getElementById('burgerBtn');
+    if (!sidebar) return;
+    const isOpen = sidebar.classList.toggle('open');
+    if (overlay) overlay.classList.toggle('active', isOpen);
+    if (burger) {
+        const icon = burger.querySelector('i');
+        if (icon) {
+            icon.className = isOpen ? 'fa-solid fa-xmark' : 'fa-solid fa-bars';
+        }
+    }
+};
+
+// Close sidebar on nav click (mobile)
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                const sidebar = document.querySelector('.sidebar');
+                const overlay = document.getElementById('sidebarOverlay');
+                const burger = document.getElementById('burgerBtn');
+                if (sidebar) sidebar.classList.remove('open');
+                if (overlay) overlay.classList.remove('active');
+                if (burger) {
+                    const icon = burger.querySelector('i');
+                    if (icon) icon.className = 'fa-solid fa-bars';
+                }
+            }
+        });
+    });
+});
 
 // --- Bitrix24 Integration ---
 

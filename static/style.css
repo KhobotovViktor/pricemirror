@@ -338,27 +338,232 @@ input::placeholder {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* --- Responsiveness --- */
+
+/* Burger menu button — hidden on desktop */
+.burger-btn {
+    display: none;
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 3000;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    background: var(--primary-gradient);
+    color: white;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-md);
+    padding: 0;
+}
+.burger-btn:hover {
+    transform: none;
+    filter: brightness(1.1);
+}
+
+/* Sidebar overlay on mobile */
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 1999;
+}
+.sidebar-overlay.active {
+    display: block;
+}
+
+/* Tablet: icon-only sidebar */
 @media (max-width: 1024px) {
     .app-layout {
-        grid-template-columns: 80px 1fr;
+        grid-template-columns: 72px 1fr;
     }
     .nav-text, .sidebar-logo span {
         display: none;
     }
     .sidebar {
-        padding: 2rem 1rem;
+        padding: 1.5rem 0.75rem;
         align-items: center;
+    }
+    .nav-link {
+        justify-content: center;
+        padding: 0.875rem;
+    }
+    .main-content {
+        padding: 2rem 1.5rem;
+    }
+    /* Statistics summary cards: 2 columns */
+    #section-statistics .glass-card:first-of-type {
+        grid-template-columns: repeat(2, 1fr) !important;
     }
 }
 
+/* Mobile: off-canvas sidebar + full responsive layout */
 @media (max-width: 768px) {
+    .burger-btn {
+        display: flex;
+    }
+
     .app-layout {
         grid-template-columns: 1fr;
     }
+
     .sidebar {
-        display: none;
+        position: fixed;
+        top: 0;
+        left: -280px;
+        width: 280px;
+        height: 100vh;
+        z-index: 2000;
+        transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        padding: 2rem 1.5rem;
+        align-items: stretch;
+        box-shadow: var(--shadow-lg);
     }
+    .sidebar.open {
+        left: 0;
+    }
+    .sidebar.open .nav-text,
+    .sidebar.open .sidebar-logo span {
+        display: inline;
+    }
+
     .main-content {
-        padding: 1.5rem;
+        padding: 4.5rem 1rem 1.5rem 1rem;
+        height: auto;
+        min-height: 100vh;
+    }
+
+    /* Header titles smaller */
+    .content-section header h1 {
+        font-size: 1.5rem !important;
+    }
+    .content-section header p {
+        font-size: 0.9rem !important;
+    }
+
+    /* Cards / grid */
+    .grid {
+        grid-template-columns: 1fr;
+    }
+    .glass-card {
+        padding: 1.25rem;
+        border-radius: var(--radius-lg);
+    }
+
+    /* Settings: single column */
+    #settingsForm > div:first-child {
+        grid-template-columns: 1fr !important;
+    }
+    /* Bitrix24 settings: single column */
+    .glass-card > div[style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Statistics summary cards: single column */
+    div[style*="grid-template-columns: repeat(4, 1fr)"] {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.75rem !important;
+    }
+
+    /* Report tabs: scrollable row */
+    div[style*="gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap"] {
+        flex-wrap: nowrap !important;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 0.5rem;
+    }
+
+    /* Product items: stack vertically */
+    .product-item {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 1rem;
+    }
+    .product-item > div[style*="text-align: right; margin-right: 1.5rem"] {
+        margin-right: 0 !important;
+        text-align: left !important;
+    }
+
+    /* Analytics modal: full screen */
+    #analyticsSection {
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        border-radius: 0 !important;
+        padding: 1.25rem !important;
+    }
+    #analyticsSection > div[style*="grid-template-columns: 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Competitor filters: stack */
+    .glass-card > div[style*="display: flex; justify-content: space-between"] {
+        flex-direction: column !important;
+        gap: 0.75rem;
+    }
+    .glass-card > div[style*="display: flex; justify-content: space-between"] > div[style*="display: flex; gap: 0.75rem"] {
+        flex-wrap: wrap;
+    }
+
+    /* Heatmap / risk / coverage: scroll horizontally */
+    #heatmapContainer, #riskTableContainer, #coverageTableContainer {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    #heatmapContainer table, #riskTableContainer table, #coverageTableContainer table {
+        min-width: 600px;
+    }
+
+    /* Coverage: stack donut + table */
+    div[style*="grid-template-columns: 300px 1fr"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Product catalog header: stack filters */
+    div[style*="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; gap: 1rem"] {
+        flex-direction: column !important;
+        align-items: stretch !important;
+    }
+    div[style*="display: flex; gap: 0.75rem; flex-grow: 1; justify-content: flex-end; flex-wrap: wrap"] {
+        justify-content: stretch !important;
+    }
+    div[style*="display: flex; gap: 0.75rem; flex-grow: 1; justify-content: flex-end; flex-wrap: wrap"] > div {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+    div[style*="display: flex; gap: 0.75rem; flex-grow: 1; justify-content: flex-end; flex-wrap: wrap"] input,
+    div[style*="display: flex; gap: 0.75rem; flex-grow: 1; justify-content: flex-end; flex-wrap: wrap"] select {
+        width: 100% !important;
+    }
+
+    /* Buttons: full width */
+    button[type="submit"],
+    button[style*="width: 100%"] {
+        width: 100%;
+    }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+    div[style*="grid-template-columns: repeat(4, 1fr)"] {
+        grid-template-columns: 1fr !important;
+    }
+
+    .price {
+        font-size: 1rem;
+    }
+
+    .product-item .product-checkbox {
+        width: 16px !important;
+        height: 16px !important;
     }
 }

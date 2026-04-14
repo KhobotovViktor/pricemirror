@@ -523,6 +523,14 @@ async def get_product_analytics(product_id: int):
                     "details": f"Ваша цена ниже или в рынке."
                 }
         
+        # Fetch our price history for this product
+        our_price_history = []
+        try:
+            oph = supabase.table("our_price_history").select("price, created_at").eq("product_id", product_id).order("created_at").execute().data
+            our_price_history = [{"date": r["created_at"], "price": float(r["price"])} for r in oph]
+        except Exception:
+            pass  # Table may not exist yet
+
         return {
             "our_product": product,
             "avg_price": round(avg_price, 2),
@@ -530,6 +538,7 @@ async def get_product_analytics(product_id: int):
             "history": sorted(history, key=lambda x: x['date'], reverse=True),
             "recommendation": recommendation,
             "our_store_color": _our_color,
+            "our_price_history": our_price_history,
         }
     except Exception as e:
         print(f"ANALYTICS ERROR: {e}")
@@ -866,11 +875,22 @@ async def update_product(
     data: dict,
     user_id: str = Depends(get_current_user)
 ):
-    """Universal product update (price, 1c article, etc)"""
+    """Universal product update (price, 1c article, etc). Records price history."""
     if not user_id:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
         
     try:
+        # Record our price history if current_price is being updated
+        if "current_price" in data and data["current_price"] is not None:
+            try:
+                supabase.table("our_price_history").insert({
+                    "product_id": product_id,
+                    "price": float(data["current_price"]),
+                    "created_at": datetime.utcnow().isoformat()
+                }).execute()
+            except Exception as hist_err:
+                print(f"[OurPriceHistory] Insert error (table may not exist): {hist_err}")
+
         supabase.table("our_product").update(data).eq("id", product_id).execute()
         return {"status": "success", "message": "Товар обновлен"}
     except Exception as e:

@@ -1831,15 +1831,21 @@ function renderXmlPreview() {
     html += '<thead><tr style="border-bottom:2px solid var(--border-soft);position:sticky;top:0;background:var(--bg-card);z-index:1;">';
     html += '<th style="padding:8px;width:30px;"></th>';
     html += '<th style="padding:8px;text-align:left;">Название</th>';
-    html += '<th style="padding:8px;text-align:left;min-width:120px;">Группа (XML)</th>';
+    html += '<th style="padding:8px;text-align:left;min-width:100px;">Группа (XML)</th>';
+    html += '<th style="padding:8px;text-align:left;min-width:100px;">Товарная группа</th>';
     html += '</tr></thead><tbody>';
 
     for (let i = 0; i < _xmlParsedOffers.length; i++) {
         const o = _xmlParsedOffers[i];
+        const resolved = o.resolved_category_name || '';
+        const resolvedBadge = resolved
+            ? `<span style="color:var(--success);font-weight:600;">${resolved}</span>`
+            : '<span style="color:var(--text-tertiary);">—</span>';
         html += `<tr class="xml-offer-row" data-index="${i}" data-xml-cat="${o.xml_category_id || ''}" data-name="${(o.name || '').toLowerCase()}" style="border-bottom:1px solid var(--border-soft);">`;
         html += `<td style="padding:6px 8px;"><input type="checkbox" class="xml-offer-checkbox" data-index="${i}" checked onchange="updateXmlSelectedCount()"></td>`;
         html += `<td style="padding:6px 8px;font-weight:600;" title="${o.url}">${o.name}</td>`;
         html += `<td style="padding:6px 8px;font-size:0.75rem;color:var(--text-muted);">${o.xml_category_name || '—'}</td>`;
+        html += `<td style="padding:6px 8px;font-size:0.75rem;">${resolvedBadge}</td>`;
         html += '</tr>';
     }
 
@@ -1883,7 +1889,7 @@ function closeXmlImportModal() {
 }
 
 async function confirmXmlImport() {
-    const categoryId = parseInt(document.getElementById('xmlImportCategorySelect')?.value);
+    const fallbackCategoryId = parseInt(document.getElementById('xmlImportCategorySelect')?.value);
     const skipDuplicates = document.getElementById('xmlSkipDuplicates')?.checked ?? true;
     const btn = document.getElementById('xmlConfirmBtn');
     const resultDiv = document.getElementById('xmlImportResultStatus');
@@ -1897,7 +1903,7 @@ async function confirmXmlImport() {
             selectedProducts.push({
                 name: offer.name,
                 url: offer.url,
-                category_id: categoryId
+                category_id: offer.resolved_category_id || fallbackCategoryId
             });
         }
     });

@@ -335,11 +335,48 @@ async def import_products_from_xml(
     user_id: str = Depends(get_current_user)
 ):
     """Import products from YML/XML catalog file (Yandex Market format).
-    Extracts name and URL from each <offer>. Price is updated by scraper separately."""
+    Extracts name and URL from each <offer>. Price is updated by scraper separately.
+    Auto-maps XML categoryId to system product categories."""
     if not user_id:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
     
     import xml.etree.ElementTree as ET
+    
+    # Mapping: XML categoryId -> system category name
+    XML_CAT_MAP = {
+        287: "Угловые диваны",
+        311: "Прямые диваны", 286: "Прямые диваны",
+        670: "Матрасы", 679: "Матрасы", 680: "Матрасы", 673: "Матрасы", 675: "Матрасы", 676: "Матрасы",
+        282: "Шкафы распашные", 283: "Шкафы распашные", 320: "Шкафы распашные", 354: "Шкафы распашные",
+        364: "Шкафы распашные", 366: "Шкафы распашные", 396: "Шкафы распашные",
+        353: "Шкафы-купе", 395: "Шкафы-купе",
+        590: "Комоды", 277: "Комоды", 360: "Комоды", 383: "Комоды",
+        259: "Столы письменные и компьютерные", 292: "Столы письменные и компьютерные", 319: "Столы письменные и компьютерные",
+        313: "Кровати", 356: "Кровати", 306: "Кровати", 321: "Кровати",
+        700: "Кухонные гарнитуры",
+        332: "Стулья кухонные", 268: "Стулья кухонные",
+        331: "Столы кухонные", 267: "Столы кухонные",
+        330: "Кухонные диваны", 333: "Кухонные диваны", 449: "Кухонные диваны",
+        275: "Стенки",
+        347: "Прихожие", 348: "Прихожие",
+        281: "ТВ-тумбы", 388: "ТВ-тумбы",
+        288: "Кресла для отдыха",
+        312: "Кресла компьютерные", 294: "Кресла компьютерные", 269: "Кресла компьютерные",
+        447: "Кресла подвесные",
+        446: "Кресла-качалки",
+        351: "Обувницы", 387: "Обувницы",
+        280: "Стеллажи",
+        384: "Прикроватные тумбы", 362: "Прикроватные тумбы",
+        338: "Табуреты",
+        276: "Столы журнальные",
+        279: "Полки навесные", 392: "Полки навесные",
+        334: "Мойки",
+        363: "Туалетные столы",
+        385: "Банкетки и пуфы",
+    }
+    # Note: 259 maps to both "Столы письменные и компьютерные" and "Туалетные столы" in the spec.
+    # We use "Столы письменные и компьютерные" as the primary mapping for 259.
+    # 363 specifically maps to "Туалетные столы".
     
     try:
         content = await file.read()
@@ -353,6 +390,18 @@ async def import_products_from_xml(
             if cat_id and cat_name:
                 xml_categories[cat_id] = cat_name
         
+        # Load system categories and build name->id lookup
+        sys_categories = supabase.table("product_category").select("id, name").execute().data
+        sys_cat_by_name = {c['name']: c['id'] for c in sys_categories}
+        
+        # Ensure all mapped categories exist in the system, create missing ones
+        needed_names = set(XML_CAT_MAP.values())
+        for cat_name in needed_names:
+            if cat_name not in sys_cat_by_name:
+                result = supabase.table("product_category").insert({"name": cat_name}).execute()
+                if result.data:
+                    sys_cat_by_name[cat_name] = result.data[0]['id']
+        
         # Parse offers
         offers = []
         for offer in root.iter('offer'):
@@ -365,12 +414,18 @@ async def import_products_from_xml(
             xml_cat_id = cat_id_el.text.strip() if cat_id_el is not None and cat_id_el.text else None
             xml_cat_name = xml_categories.get(xml_cat_id, '') if xml_cat_id else ''
             
+            # Resolve system category
+            resolved_cat_name = XML_CAT_MAP.get(int(xml_cat_id), None) if xml_cat_id and xml_cat_id.isdigit() else None
+            resolved_cat_id = sys_cat_by_name.get(resolved_cat_name) if resolved_cat_name else None
+            
             if name and url:
                 offers.append({
                     "name": name,
                     "url": url,
                     "xml_category_id": xml_cat_id,
                     "xml_category_name": xml_cat_name,
+                    "resolved_category_id": resolved_cat_id,
+                    "resolved_category_name": resolved_cat_name or "",
                 })
         
         return {"status": "success", "offers": offers, "total": len(offers)}

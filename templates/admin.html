@@ -607,7 +607,7 @@
             
             <div class="flex gap-md mb-md flex-wrap items-end">
                 <div style="flex:1;min-width:min(180px,100%)">
-                    <label class="form-label text-muted">Товарная группа для импорта</label>
+                    <label class="form-label text-muted">Товарная группа (для нераспознанных)</label>
                     <select class="form-select" id="xmlImportCategorySelect">
                         {% for cat in categories %}
                         <option value="{{ cat.id }}">{{ cat.name }}</option>

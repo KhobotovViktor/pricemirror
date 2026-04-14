@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 import os
 import io
 import csv
+import json
 import urllib.parse
 import jwt
 import time
@@ -366,6 +367,14 @@ async def get_analytics_full(user_id: str = Depends(get_current_user)):
         categories = supabase.table("product_category").select("*").order("name").execute().data
         stores = supabase.table("competitor_store").select("*").order("name").execute().data
 
+        # 1b. Store colors
+        _sc_row = supabase.table("system_settings").select("value").eq("key", "store_colors").execute().data
+        store_colors = json.loads(_sc_row[0]["value"]) if _sc_row else {}
+        _oc_row = supabase.table("system_settings").select("value").eq("key", "our_store_color").execute().data
+        our_store_color = _oc_row[0]["value"] if _oc_row else "#6366f1"
+        for s in stores:
+            s["color"] = store_colors.get(str(s["id"]), "#64748b")
+
         # 2. All products with category name
         products_raw = supabase.table("our_product").select("*, category:product_category(name)").execute().data
 
@@ -445,6 +454,8 @@ async def get_analytics_full(user_id: str = Depends(get_current_user)):
             "stores": stores,
             "products": products_out,
             "trend": trend,
+            "store_colors": store_colors,
+            "our_store_color": our_store_color,
         }
     except Exception as e:
         import traceback as _tb
@@ -461,7 +472,13 @@ async def get_product_analytics(product_id: int):
         product = prod_resp.data[0]
         
         # 2. Fetch competitor mappings with store names and their price records
-        mappings_resp = supabase.table("competitor_product").select("*, competitor_store(name), price_record(*)").eq("our_product_id", product_id).execute()
+        mappings_resp = supabase.table("competitor_product").select("*, competitor_store(id, name), price_record(*)").eq("our_product_id", product_id).execute()
+
+        # 2b. Store colors
+        _sc2 = supabase.table("system_settings").select("value").eq("key", "store_colors").execute().data
+        _sc2_map = json.loads(_sc2[0]["value"]) if _sc2 else {}
+        _oc2 = supabase.table("system_settings").select("value").eq("key", "our_store_color").execute().data
+        _our_color = _oc2[0]["value"] if _oc2 else "#6366f1"
         
         history = []
         latest_prices = []
@@ -469,13 +486,16 @@ async def get_product_analytics(product_id: int):
         for mapping in mappings_resp.data:
             store_data = mapping.get('competitor_store') or {}
             store_name = store_data.get('name', 'Конкурент')
+            store_id = store_data.get('id')
+            store_color = _sc2_map.get(str(store_id), '#64748b') if store_id else '#64748b'
             records = mapping.get('price_record', [])
             
             for r in records:
                 history.append({
                     "date": r['created_at'],
                     "price": float(r['price']),
-                    "store": store_name
+                    "store": store_name,
+                    "color": store_color,
                 })
             
             if records:
@@ -508,7 +528,8 @@ async def get_product_analytics(product_id: int):
             "avg_price": round(avg_price, 2),
             "min_competitor": round(min_price, 2),
             "history": sorted(history, key=lambda x: x['date'], reverse=True),
-            "recommendation": recommendation
+            "recommendation": recommendation,
+            "our_store_color": _our_color,
         }
     except Exception as e:
         print(f"ANALYTICS ERROR: {e}")
@@ -890,10 +911,42 @@ async def get_all_competitor_products(user_id: str = Depends(get_current_user)):
 
 @app.get("/api/stores")
 async def get_stores(user_id: str = Depends(get_current_user)):
-    """Returns list of all competitor stores for filtering"""
+    """Returns list of all competitor stores with colors"""
     if not user_id:
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
     try:
-        return supabase.table("competitor_store").select("*").order("name").execute().data
+        stores = supabase.table("competitor_store").select("*").order("name").execute().data
+        _c = supabase.table("system_settings").select("value").eq("key", "store_colors").execute().data
+        sc = json.loads(_c[0]["value"]) if _c else {}
+        for s in stores:
+            s["color"] = sc.get(str(s["id"]), "#64748b")
+        return stores
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/stores/{store_id}/color")
+async def update_store_color(store_id: int, color: str = Form(...), user_id: str = Depends(get_current_user)):
+    """Update the display color for a competitor store."""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        _r = supabase.table("system_settings").select("value").eq("key", "store_colors").execute().data
+        sc = json.loads(_r[0]["value"]) if _r else {}
+        sc[str(store_id)] = color
+        supabase.table("system_settings").upsert({"key": "store_colors", "value": json.dumps(sc)}, on_conflict="key").execute()
+        return {"status": "ok", "store_id": store_id, "color": color}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/settings/our-color")
+async def update_our_store_color(color: str = Form(...), user_id: str = Depends(get_current_user)):
+    """Update the display color for our store."""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        supabase.table("system_settings").upsert({"key": "our_store_color", "value": color}, on_conflict="key").execute()
+        return {"status": "ok", "color": color}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -437,15 +437,19 @@ async function renderAvgPriceReport() {
         }
     }
 
+    // Build color lookup from API data
+    const storeColorMap = {};
+    for (const s of data.stores) storeColorMap[s.name] = s.color || '#64748b';
+    const ourColor = data.our_store_color || '#6366f1';
+
     const labels = [];
     const values = [];
     const colors = [];
-    let ci = 0;
     for (const [name, prices] of Object.entries(storePrices)) {
         if (prices.length === 0) continue;
         labels.push(name);
         values.push(Math.round(prices.reduce((a, b) => a + b, 0) / prices.length));
-        colors.push(name === 'Аллея Дома' ? '#6366f1' : REPORT_COLORS[(ci++) % REPORT_COLORS.length]);
+        colors.push(name === 'Аллея Дома' ? ourColor : (storeColorMap[name] || '#64748b'));
     }
 
     const canvas = document.getElementById('avgPriceChart');
@@ -567,14 +571,15 @@ async function renderTrendReport() {
         }
     }
 
+    // Build store color lookup
+    const storeColorById = {};
+    for (const s of data.stores) storeColorById[String(s.id)] = s.color || '#64748b';
+
     for (const [sid, sdata] of Object.entries(data.trend)) {
-        // If filtering by category, we need to check if this store has products in category
-        // Since trend is aggregated across all products per store, we show all stores
-        // (the /api/analytics/full already provides store-level daily data)
         const dates = Object.keys(sdata.data);
         dates.forEach(d => allDates.add(d));
 
-        const color = REPORT_COLORS[ci % REPORT_COLORS.length];
+        const color = storeColorById[sid] || REPORT_COLORS[ci % REPORT_COLORS.length];
         datasets.push({
             label: sdata.store_name,
             data: dates.map(d => ({ x: d, y: sdata.data[d] })),
@@ -979,29 +984,31 @@ function renderChart(data) {
 
     const sortedHistory = [...data.history].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Group history by store
+    // Group history by store, collect color per store
     const storeData = {};
+    const storeColorMap = {};
     const allDates = new Set();
     for (const h of sortedHistory) {
         const store = h.store || 'Конкурент';
         if (!storeData[store]) storeData[store] = {};
+        if (h.color) storeColorMap[store] = h.color;
         const day = new Date(h.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
         allDates.add(day);
-        // Keep latest price per day per store
         storeData[store][day] = h.price;
     }
 
     const labels = [...allDates];
+    const ourColor = data.our_store_color || '#6366f1';
 
-    // Build per-store datasets
-    const storeColors = [
+    // Fallback colors if API didn't provide
+    const fallbackColors = [
         '#a855f7', '#ec4899', '#f97316', '#22c55e', '#06b6d4',
         '#3b82f6', '#eab308', '#14b8a6', '#f43f5e', '#8b5cf6',
     ];
     const datasets = [];
     let ci = 0;
     for (const [store, dayPrices] of Object.entries(storeData)) {
-        const color = storeColors[ci % storeColors.length];
+        const color = storeColorMap[store] || fallbackColors[ci % fallbackColors.length];
         datasets.push({
             label: store,
             data: labels.map(d => dayPrices[d] ?? null),
@@ -1022,7 +1029,7 @@ function renderChart(data) {
     datasets.push({
         label: 'Наша цена',
         data: labels.map(() => data.our_product.current_price),
-        borderColor: '#6366f1',
+        borderColor: ourColor,
         borderDash: [8, 4],
         pointRadius: 0,
         fill: false,
@@ -1120,9 +1127,55 @@ async function loadSettings() {
         if (els.token) els.token.value = data.telegram_bot_token || '';
         if (els.chat) els.chat.value = data.telegram_chat_id || '';
         if (els.interval) els.interval.value = data.scan_interval_hours || '12';
+
+        // Load our store color
+        const ourPicker = document.getElementById('ourStoreColorPicker');
+        if (ourPicker && data.our_store_color) ourPicker.value = data.our_store_color;
     } catch (err) {
         console.error('Failed to load settings:', err);
     }
+    loadStoreColors();
+}
+
+async function loadStoreColors() {
+    const container = document.getElementById('storeColorList');
+    if (!container) return;
+    try {
+        const resp = await fetch('/api/stores', { credentials: 'include' });
+        if (!resp.ok) return;
+        const stores = await resp.json();
+        container.innerHTML = stores.map(s => `
+            <div style="display:flex;align-items:center;gap:1rem;padding:0.6rem 0;border-bottom:1px solid var(--border-soft);">
+                <input type="color" value="${s.color || '#64748b'}" id="storeColor_${s.id}" style="width:36px;height:36px;border:2px solid var(--border-soft);border-radius:var(--radius-sm);cursor:pointer;padding:2px;">
+                <div style="flex:1;"><div style="font-weight:700;font-size:0.95rem;">${s.name}</div><div style="font-size:0.75rem;color:var(--text-muted);">${s.domain}</div></div>
+                <button onclick="saveStoreColor(${s.id})" class="secondary" style="padding:0.4rem 1rem;font-size:0.8rem;">Сохранить</button>
+            </div>
+        `).join('');
+    } catch (err) { console.error('Store colors error:', err); }
+}
+
+async function saveStoreColor(storeId) {
+    const picker = document.getElementById('storeColor_' + storeId);
+    if (!picker) return;
+    const fd = new FormData();
+    fd.append('color', picker.value);
+    try {
+        const r = await fetch(`/api/stores/${storeId}/color`, { method: 'PUT', body: fd, credentials: 'include' });
+        if (r.ok) { _analyticsData = null; alert('Цвет сохранён'); }
+        else alert('Ошибка сохранения');
+    } catch (e) { alert('Ошибка: ' + e.message); }
+}
+
+async function saveOurStoreColor() {
+    const picker = document.getElementById('ourStoreColorPicker');
+    if (!picker) return;
+    const fd = new FormData();
+    fd.append('color', picker.value);
+    try {
+        const r = await fetch('/api/settings/our-color', { method: 'PUT', body: fd, credentials: 'include' });
+        if (r.ok) { _analyticsData = null; alert('Цвет сохранён'); }
+        else alert('Ошибка сохранения');
+    } catch (e) { alert('Ошибка: ' + e.message); }
 }
 
 // Bridge functions
@@ -1142,6 +1195,8 @@ window.renderHeatmap = renderHeatmap;
 window.renderTrendReport = renderTrendReport;
 window.renderRiskReport = renderRiskReport;
 window.renderCoverageReport = renderCoverageReport;
+window.saveStoreColor = saveStoreColor;
+window.saveOurStoreColor = saveOurStoreColor;
 
 // --- PDF Report (client-side) ---
 

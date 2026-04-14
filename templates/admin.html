@@ -439,6 +439,25 @@
                             </button>
                         </form>
                     </div>
+
+                    <!-- Store Colors -->
+                    <div class="glass-card" style="max-width: 800px; margin-top: 2rem;">
+                        <h2 style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+                            <i class="fa-solid fa-palette" style="color: var(--secondary);"></i>
+                            Цвета магазинов на графиках
+                        </h2>
+                        <div style="margin-bottom: 1rem;">
+                            <div style="display: flex; align-items: center; gap: 1rem; padding: 0.75rem 0; border-bottom: 1px solid var(--border-soft);">
+                                <input type="color" id="ourStoreColorPicker" value="#6366f1" style="width: 36px; height: 36px; border: 2px solid var(--border-soft); border-radius: var(--radius-sm); cursor: pointer; padding: 2px;">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 700; font-size: 0.95rem;">Аллея Дома</div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Наш магазин</div>
+                                </div>
+                                <button onclick="saveOurStoreColor()" class="secondary" style="padding: 0.4rem 1rem; font-size: 0.8rem;">Сохранить</button>
+                            </div>
+                        </div>
+                        <div id="storeColorList" style="display: flex; flex-direction: column; gap: 0;"></div>
+                    </div>
                 </section>
 
                 <!-- SHARED: PRODUCT ANALYTICS MODAL -->

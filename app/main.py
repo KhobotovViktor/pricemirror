@@ -353,6 +353,104 @@ async def get_prices_for_1c(user_id: str = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/analytics/full")
+async def get_analytics_full(user_id: str = Depends(get_current_user)):
+    """Returns all data needed for the 5 analytics reports."""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        from collections import defaultdict
+        from datetime import datetime, timedelta
+
+        # 1. Categories & Stores
+        categories = supabase.table("product_category").select("*").order("name").execute().data
+        stores = supabase.table("competitor_store").select("*").order("name").execute().data
+
+        # 2. All products with category name
+        products_raw = supabase.table("our_product").select("*, category:product_category(name)").execute().data
+
+        # 3. All competitor mappings
+        mappings = supabase.table("competitor_product").select("*, competitor_store(id, name)").execute().data
+
+        # 4. Price history last 30 days (with store_id via competitor_product)
+        cutoff = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        records = supabase.table("price_record").select(
+            "price, created_at, competitor_product(store_id, our_product_id)"
+        ).gte("created_at", cutoff).order("created_at").execute().data
+
+        # Build mapping_by_product
+        mapping_by_product = defaultdict(list)
+        for m in mappings:
+            store = m.get("competitor_store") or {}
+            mapping_by_product[m["our_product_id"]].append({
+                "id": m["id"],
+                "store_id": m["store_id"],
+                "store_name": store.get("name", "—"),
+                "last_price": float(m["last_price"]) if m.get("last_price") else None,
+                "last_scrape": m.get("last_scrape"),
+            })
+
+        # Build products output
+        now = datetime.utcnow()
+        products_out = []
+        for p in products_raw:
+            pmappings = mapping_by_product.get(p["id"], [])
+            prices = [m["last_price"] for m in pmappings if m["last_price"]]
+            min_comp = min(prices) if prices else None
+            our_price = float(p["current_price"]) if p.get("current_price") else None
+            # Determine stale: last scrape > 7 days ago
+            scrapes = [m["last_scrape"] for m in pmappings if m.get("last_scrape")]
+            latest_scrape = max(scrapes) if scrapes else None
+            is_stale = False
+            if latest_scrape:
+                try:
+                    ls = datetime.fromisoformat(latest_scrape.replace("Z", "+00:00").replace("+00:00", ""))
+                    is_stale = (now - ls).days > 7
+                except Exception:
+                    pass
+            products_out.append({
+                "id": p["id"],
+                "name": p["name"],
+                "category_id": p["category_id"],
+                "category_name": p["category"]["name"] if p.get("category") else "—",
+                "current_price": our_price,
+                "mappings": pmappings,
+                "min_comp_price": min_comp,
+                "has_mapping": len(pmappings) > 0,
+                "has_price": min_comp is not None,
+                "is_stale": is_stale,
+            })
+
+        # Build trend: store_id -> { store_name, data: {date: avg_price} }
+        store_day = defaultdict(lambda: defaultdict(list))
+        store_names = {s["id"]: s["name"] for s in stores}
+        for r in records:
+            cp = r.get("competitor_product")
+            if not cp:
+                continue
+            sid = cp.get("store_id")
+            day = r["created_at"][:10]
+            if sid and r.get("price"):
+                store_day[sid][day].append(float(r["price"]))
+
+        trend = {}
+        for sid, days in store_day.items():
+            trend[str(sid)] = {
+                "store_name": store_names.get(sid, str(sid)),
+                "data": {day: round(sum(v) / len(v), 2) for day, v in sorted(days.items())},
+            }
+
+        return {
+            "categories": categories,
+            "stores": stores,
+            "products": products_out,
+            "trend": trend,
+        }
+    except Exception as e:
+        import traceback as _tb
+        print(f"ANALYTICS FULL ERROR: {e}\n{_tb.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/analytics/{product_id}")
 async def get_product_analytics(product_id: int):
     try:

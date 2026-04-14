@@ -85,7 +85,7 @@
                                     <input class="form-input" type="text" name="name" placeholder="Напр: Диван угловой 'Босс'" required>
                                 </div>
                                 <div class="form-group">
-                                    <label class="form-label">Категория</label>
+                                    <label class="form-label">Товарная группа</label>
                                     <select class="form-select" name="category_id" required>
                                         {% for cat in categories %}
                                         <option value="{{ cat.id }}">{{ cat.name }}</option>
@@ -140,7 +140,7 @@
                                 <div class="form-input-icon">
                                     <i class="fa-solid fa-layer-group"></i>
                                     <select class="form-select" id="categoryFilter" style="min-width:180px">
-                                        <option value="all">Все категории</option>
+                                        <option value="all">Все товарные группы</option>
                                         {% for cat in categories %}
                                         <option value="{{ cat.id }}">{{ cat.name }}</option>
                                         {% endfor %}
@@ -189,7 +189,7 @@
                                 <div class="product-info">
                                     <div class="product-name">{{ prod.name }}</div>
                                     <div class="product-meta">
-                                        {{ prod.category.name if prod.category else 'Без категории' }} &bull; ID: {{ prod.id }}
+                                        {{ prod.category.name if prod.category else 'Без товарной группы' }} &bull; ID: {{ prod.id }}
                                     </div>
                                 </div>
                                 <div class="product-price-col">
@@ -305,10 +305,10 @@
                     <!-- Report Tabs -->
                     <div class="report-tabs">
                         <button onclick="switchReportTab('avg-price')" class="report-tab active" id="tab-avg-price">
-                            <i class="fa-solid fa-chart-bar"></i> Средняя цена группы
+                            <i class="fa-solid fa-chart-bar"></i> Средняя цена группы товаров
                         </button>
                         <button onclick="switchReportTab('heatmap')" class="report-tab" id="tab-heatmap">
-                            <i class="fa-solid fa-table-cells"></i> Heatmap разрывов
+                            <i class="fa-solid fa-table-cells"></i> Тепловая карта ценовых разрывов
                         </button>
                         <button onclick="switchReportTab('trend')" class="report-tab" id="tab-trend">
                             <i class="fa-solid fa-chart-line"></i> Динамика цен
@@ -324,15 +324,20 @@
                     <!-- Report 1: Average Price -->
                     <div id="report-avg-price" class="report-panel active">
                         <div class="card">
-                            <h2 class="section-title">
-                                <i class="fa-solid fa-chart-bar" style="color:var(--primary)"></i>
-                                Средняя цена группы товаров
-                            </h2>
+                            <div class="flex justify-between items-start mb-md flex-wrap gap-sm">
+                                <h2 class="section-title" style="margin-bottom:0">
+                                    <i class="fa-solid fa-chart-bar" style="color:var(--primary)"></i>
+                                    Средняя цена группы товаров
+                                </h2>
+                                <button onclick="downloadReportPdf('avg-price')" class="btn btn-secondary btn-sm">
+                                    <i class="fa-solid fa-file-pdf"></i> Скачать PDF
+                                </button>
+                            </div>
                             <div class="flex gap-md mb-lg flex-wrap items-end">
                                 <div class="flex-1" style="min-width:200px;position:relative;z-index:10">
-                                    <label class="form-label text-muted">Категория</label>
+                                    <label class="form-label text-muted">Товарная группа</label>
                                     <select class="form-select" id="avgPriceCategoryFilter" onchange="renderAvgPriceReport()">
-                                        <option value="">Все категории</option>
+                                        <option value="">Все товарные группы</option>
                                     </select>
                                 </div>
                                 <div style="flex:2;min-width:300px">
@@ -349,14 +354,19 @@
                     <!-- Report 2: Heatmap -->
                     <div id="report-heatmap" class="report-panel">
                         <div class="card">
-                            <h2 class="section-title">
-                                <i class="fa-solid fa-table-cells" style="color:var(--primary)"></i>
-                                Heatmap ценовых разрывов
-                            </h2>
+                            <div class="flex justify-between items-start mb-md flex-wrap gap-sm">
+                                <h2 class="section-title" style="margin-bottom:0">
+                                    <i class="fa-solid fa-table-cells" style="color:var(--primary)"></i>
+                                    Тепловая карта ценовых разрывов
+                                </h2>
+                                <button onclick="downloadReportPdf('heatmap')" class="btn btn-secondary btn-sm">
+                                    <i class="fa-solid fa-file-pdf"></i> Скачать PDF
+                                </button>
+                            </div>
                             <div class="mb-md">
-                                <label class="form-label text-muted">Категория</label>
+                                <label class="form-label text-muted">Товарная группа</label>
                                 <select class="form-select" id="heatmapCategoryFilter" onchange="renderHeatmap()" style="min-width:250px">
-                                    <option value="">Все категории</option>
+                                    <option value="">Все товарные группы</option>
                                 </select>
                             </div>
                             <div id="heatmapContainer" style="overflow-x:auto"></div>
@@ -372,14 +382,19 @@
                     <!-- Report 3: Trend -->
                     <div id="report-trend" class="report-panel">
                         <div class="card">
-                            <h2 class="section-title">
-                                <i class="fa-solid fa-chart-line" style="color:var(--primary)"></i>
-                                Динамика цен по категории (30 дней)
-                            </h2>
+                            <div class="flex justify-between items-start mb-md flex-wrap gap-sm">
+                                <h2 class="section-title" style="margin-bottom:0">
+                                    <i class="fa-solid fa-chart-line" style="color:var(--primary)"></i>
+                                    Динамика цен по товарной группе (30 дней)
+                                </h2>
+                                <button onclick="downloadReportPdf('trend')" class="btn btn-secondary btn-sm">
+                                    <i class="fa-solid fa-file-pdf"></i> Скачать PDF
+                                </button>
+                            </div>
                             <div class="mb-md">
-                                <label class="form-label text-muted">Категория</label>
+                                <label class="form-label text-muted">Товарная группа</label>
                                 <select class="form-select" id="trendCategoryFilter" onchange="renderTrendReport()" style="min-width:250px">
-                                    <option value="">Все категории</option>
+                                    <option value="">Все товарные группы</option>
                                 </select>
                             </div>
                             <div class="chart-container chart-container--tall">
@@ -391,10 +406,15 @@
                     <!-- Report 4: Risk -->
                     <div id="report-risk" class="report-panel">
                         <div class="card">
-                            <h2 class="section-title">
-                                <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger)"></i>
-                                Товары в зоне риска
-                            </h2>
+                            <div class="flex justify-between items-start mb-md flex-wrap gap-sm">
+                                <h2 class="section-title" style="margin-bottom:0">
+                                    <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger)"></i>
+                                    Товары в зоне риска
+                                </h2>
+                                <button onclick="downloadReportPdf('risk')" class="btn btn-secondary btn-sm">
+                                    <i class="fa-solid fa-file-pdf"></i> Скачать PDF
+                                </button>
+                            </div>
                             <div id="riskTableContainer" style="overflow-x:auto"></div>
                         </div>
                     </div>
@@ -402,10 +422,15 @@
                     <!-- Report 5: Coverage -->
                     <div id="report-coverage" class="report-panel">
                         <div class="card">
-                            <h2 class="section-title">
-                                <i class="fa-solid fa-chart-pie" style="color:var(--primary)"></i>
-                                Покрытие мониторинга
-                            </h2>
+                            <div class="flex justify-between items-start mb-md flex-wrap gap-sm">
+                                <h2 class="section-title" style="margin-bottom:0">
+                                    <i class="fa-solid fa-chart-pie" style="color:var(--primary)"></i>
+                                    Покрытие мониторинга
+                                </h2>
+                                <button onclick="downloadReportPdf('coverage')" class="btn btn-secondary btn-sm">
+                                    <i class="fa-solid fa-file-pdf"></i> Скачать PDF
+                                </button>
+                            </div>
                             <div class="coverage-grid">
                                 <div style="position:relative;height:300px">
                                     <canvas id="coverageDonut"></canvas>

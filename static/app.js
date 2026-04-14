@@ -370,7 +370,7 @@ function _populateAnalyticsFilters() {
         const sel = document.getElementById(id);
         if (!sel) { console.warn('Filter element not found:', id); return; }
         const currentVal = sel.value;
-        sel.innerHTML = '<option value="">Все категории</option>' +
+        sel.innerHTML = '<option value="">Все товарные группы</option>' +
             cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
         if (currentVal) sel.value = currentVal; // restore selection
     });
@@ -453,6 +453,13 @@ async function renderAvgPriceReport() {
     if (!canvas) return;
     if (avgPriceChart) avgPriceChart.destroy();
 
+    // Dynamic height: ensure enough space for each bar label
+    const barHeight = 48; // px per bar
+    const minHeight = 350;
+    const dynamicHeight = Math.max(minHeight, labels.length * barHeight + 60);
+    canvas.parentElement.style.minHeight = dynamicHeight + 'px';
+    canvas.parentElement.style.height = dynamicHeight + 'px';
+
     avgPriceChart = new Chart(canvas.getContext('2d'), {
         type: 'bar',
         data: {
@@ -470,6 +477,9 @@ async function renderAvgPriceReport() {
             indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
+            layout: {
+                padding: { left: 12, right: 16 }
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: { backgroundColor: '#1e293b', padding: 12, cornerRadius: 8 }
@@ -480,8 +490,21 @@ async function renderAvgPriceReport() {
                     grid: { color: '#f1f5f9' }
                 },
                 y: {
-                    ticks: { color: '#334155', font: { weight: '700', size: 13 } },
-                    grid: { display: false }
+                    ticks: {
+                        color: '#334155',
+                        font: { weight: '700', size: 13 },
+                        autoSkip: false,
+                        maxRotation: 0,
+                        padding: 8,
+                        callback: function(value) {
+                            const label = this.getLabelForValue(value);
+                            return label;
+                        }
+                    },
+                    grid: { display: false },
+                    afterFit: function(scaleInstance) {
+                        scaleInstance.width = Math.max(scaleInstance.width, 180);
+                    }
                 }
             }
         }
@@ -1346,6 +1369,103 @@ window.testBitrix24 = async () => {
 
 // --- PDF Report (client-side) ---
 
+// Report titles mapping
+const REPORT_TITLES = {
+    'avg-price': 'Средняя цена группы товаров',
+    'heatmap': 'Тепловая карта ценовых разрывов',
+    'trend': 'Динамика цен по товарной группе (30 дней)',
+    'risk': 'Товары в зоне риска',
+    'coverage': 'Покрытие мониторинга'
+};
+
+async function downloadReportPdf(reportId) {
+    const now = new Date().toLocaleString('ru-RU');
+    const title = REPORT_TITLES[reportId] || 'Отчёт';
+
+    let contentHtml = '';
+
+    if (reportId === 'avg-price') {
+        // Convert chart canvas to image
+        const canvas = document.getElementById('avgPriceChart');
+        if (canvas) {
+            const imgData = canvas.toDataURL('image/png', 1.0);
+            contentHtml = `<img src="${imgData}" style="max-width:100%;height:auto;">`;
+        } else {
+            contentHtml = '<p>График не найден</p>';
+        }
+    } else if (reportId === 'heatmap') {
+        const container = document.getElementById('heatmapContainer');
+        const legend = document.querySelector('#report-heatmap .heatmap-legend');
+        if (container) {
+            contentHtml = container.innerHTML;
+            if (legend) contentHtml += '<div style="margin-top:16px;">' + legend.innerHTML + '</div>';
+        } else {
+            contentHtml = '<p>Данные не найдены</p>';
+        }
+    } else if (reportId === 'trend') {
+        const canvas = document.getElementById('trendChart');
+        if (canvas) {
+            const imgData = canvas.toDataURL('image/png', 1.0);
+            contentHtml = `<img src="${imgData}" style="max-width:100%;height:auto;">`;
+        } else {
+            contentHtml = '<p>График не найден</p>';
+        }
+    } else if (reportId === 'risk') {
+        const container = document.getElementById('riskTableContainer');
+        if (container) {
+            contentHtml = container.innerHTML;
+        } else {
+            contentHtml = '<p>Данные не найдены</p>';
+        }
+    } else if (reportId === 'coverage') {
+        const canvas = document.getElementById('coverageDonut');
+        const table = document.getElementById('coverageTableContainer');
+        let parts = [];
+        if (canvas) {
+            const imgData = canvas.toDataURL('image/png', 1.0);
+            parts.push(`<div style="text-align:center;margin-bottom:24px;"><img src="${imgData}" style="max-width:400px;height:auto;"></div>`);
+        }
+        if (table) {
+            parts.push(table.innerHTML);
+        }
+        contentHtml = parts.join('') || '<p>Данные не найдены</p>';
+    }
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Price Mirror - ${title}</title>
+<style>
+    @media print {
+        body { margin: 0; padding: 20px; }
+        .no-print { display: none !important; }
+        @page { size: A4 ${reportId === 'heatmap' || reportId === 'risk' ? 'landscape' : 'portrait'}; margin: 15mm; }
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #0f172a; background: #fff; padding: 30px; }
+    h1 { font-size: 22px; margin: 0 0 4px; }
+    .subtitle { color: #64748b; font-size: 13px; margin-bottom: 24px; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { padding: 8px; text-align: left; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; }
+    td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; font-size: 12px; }
+    img { display: block; margin: 0 auto; }
+    .print-btn { position: fixed; top: 20px; right: 20px; padding: 10px 24px; background: #6366f1; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; z-index: 100; }
+</style>
+</head><body>
+<button class="no-print print-btn" onclick="window.print()"><i class="fa-solid fa-print"></i> Печать / Сохранить PDF</button>
+<h1>Price Mirror — ${title}</h1>
+<div class="subtitle">Сформирован: ${now} &bull; Аллея Дома (alleyadoma.ru)</div>
+${contentHtml}
+</body></html>`;
+
+    const w = window.open('', '_blank');
+    if (w) {
+        w.document.write(html);
+        w.document.close();
+    } else {
+        alert('Браузер заблокировал всплывающее окно. Разрешите popup для этого сайта.');
+    }
+}
+
+window.downloadReportPdf = downloadReportPdf;
+
 async function generatePdfReport() {
     const data = await loadAnalyticsData();
     if (!data) {
@@ -1414,7 +1534,7 @@ async function generatePdfReport() {
 </div>
 <table>
 <thead><tr>
-    <th>Товар</th><th style="text-align:right;">Категория</th><th style="text-align:right;">Наша цена</th>
+    <th>Товар</th><th style="text-align:right;">Товарная группа</th><th style="text-align:right;">Наша цена</th>
     <th style="text-align:right;">Мин. конкурента</th><th style="text-align:center;">Магазин</th><th style="text-align:right;">Разница</th>
 </tr></thead>
 <tbody>${rows}</tbody>

@@ -13,10 +13,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // 1. Add Product Form
     const productForm = document.getElementById('productForm');
     const urlInput = document.getElementById('productUrlInput');
-    const priceInput = document.getElementById('productPriceInput');
     const syncStatus = document.getElementById('priceSyncStatus');
 
-    if (urlInput && priceInput) {
+    // Auto-fetch price from URL on paste/change (background scrape on submit)
+    if (urlInput && syncStatus) {
         let lastUrl = "";
         const handleUrlChange = async () => {
             const url = urlInput.value.trim();
@@ -25,59 +25,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const isOurStore = url.includes('alleyadoma.ru');
             
-            // Standard state
-            priceInput.disabled = isOurStore;
-            if (syncStatus) {
-                syncStatus.style.display = isOurStore ? 'inline-flex' : 'none';
-                syncStatus.innerHTML = '<i class="fa-solid fa-sync fa-spin"></i> Авто';
-                syncStatus.style.color = "var(--primary)";
-            }
-            
             if (isOurStore && url.length > 20) {
-                // If it's our store, fetch price immediately
-                priceInput.placeholder = "Получаем актуальную цену...";
-                priceInput.style.background = "var(--bg-soft)";
-                
-                try {
-                    const response = await fetch(`/api/scrape/preview?url=${encodeURIComponent(url)}`, {credentials: 'include'});
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data.price) {
-                            priceInput.value = data.price;
-                            priceInput.placeholder = "";
-                            if (syncStatus) {
-                                syncStatus.innerHTML = '<i class="fa-solid fa-check-circle"></i> Готово';
-                                syncStatus.style.color = "var(--success)";
-                            }
-                        } else {
-                            priceInput.placeholder = "Цена не найдена, введите вручную";
-                            priceInput.disabled = false;
-                            if (syncStatus) {
-                                syncStatus.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Ошибка';
-                                syncStatus.style.color = "var(--danger)";
-                            }
-                        }
-                    }
-                } catch (err) {
-                    console.error("Preview error:", err);
-                    priceInput.disabled = false;
-                }
-            } else if (!isOurStore) {
-                priceInput.placeholder = "49990";
-                priceInput.style.background = "white";
-                priceInput.title = "";
-                priceInput.disabled = false;
+                syncStatus.style.display = 'block';
+                syncStatus.innerHTML = '<i class="fa-solid fa-sync fa-spin"></i> Цена будет получена автоматически после сохранения';
+                syncStatus.style.color = "var(--primary)";
+            } else {
+                syncStatus.style.display = 'none';
             }
         };
 
-        urlInput.addEventListener('input', () => {
-            if (urlInput.value.includes('alleyadoma.ru')) {
-                // Debounce simple
-                setTimeout(handleUrlChange, 500);
-            } else {
-                handleUrlChange();
-            }
-        });
+        urlInput.addEventListener('input', () => setTimeout(handleUrlChange, 300));
         urlInput.addEventListener('change', handleUrlChange);
         urlInput.addEventListener('paste', () => setTimeout(handleUrlChange, 100));
     }

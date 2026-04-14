@@ -74,28 +74,20 @@
                                     <label>Название товара</label>
                                     <input type="text" name="name" placeholder="Напр: Диван угловой 'Босс'" required>
                                 </div>
-                                <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
-                                    <div class="form-group">
-                                        <label>Категория</label>
-                                        <select name="category_id" required>
-                                            {% for cat in categories %}
-                                            <option value="{{ cat.id }}">{{ cat.name }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <div class="form-group">
-                                        <label style="display: flex; justify-content: space-between; align-items: center;">
-                                            Текущая цена (₽)
-                                            <span id="priceSyncStatus" style="font-size: 0.75rem; color: var(--primary); font-weight: 700; display: none;">
-                                                <i class="fa-solid fa-sync fa-spin"></i> Авто
-                                            </span>
-                                        </label>
-                                        <input type="number" id="productPriceInput" name="price" step="0.01" placeholder="49990">
-                                    </div>
+                                <div class="form-group">
+                                    <label>Категория</label>
+                                    <select name="category_id" required>
+                                        {% for cat in categories %}
+                                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                                        {% endfor %}
+                                    </select>
                                 </div>
                                 <div class="form-group">
                                     <label>URL на нашем сайте (alleyadoma.ru)</label>
-                                    <input type="url" id="productUrlInput" name="url" placeholder="https://alleyadoma.ru/catalog/...">
+                                    <input type="url" id="productUrlInput" name="url" placeholder="https://alleyadoma.ru/catalog/..." required>
+                                    <small id="priceSyncStatus" style="font-size: 0.75rem; color: var(--primary); font-weight: 700; display: none; margin-top: 0.25rem;">
+                                        <i class="fa-solid fa-sync fa-spin"></i> Получаем цену с сайта...
+                                    </small>
                                 </div>
                                 <button type="submit" style="width: 100%; justify-content: center;">
                                     <i class="fa-solid fa-save"></i> Сохранить товар

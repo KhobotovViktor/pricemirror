@@ -460,12 +460,45 @@ async function renderAvgPriceReport() {
     canvas.parentElement.style.minHeight = dynamicHeight + 'px';
     canvas.parentElement.style.height = dynamicHeight + 'px';
 
+    // Plugin to draw price labels inside bars
+    const barLabelPlugin = {
+        id: 'avgPriceBarLabels',
+        afterDatasetsDraw(chart) {
+            const { ctx } = chart;
+            const meta = chart.getDatasetMeta(0);
+            if (!meta || !meta.data) return;
+            meta.data.forEach((bar, i) => {
+                const value = chart.data.datasets[0].data[i];
+                if (!value) return;
+                const barWidth = bar.width;
+                const text = value.toLocaleString('ru-RU') + ' \u20BD';
+                ctx.save();
+                ctx.font = 'bold 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+                const textWidth = ctx.measureText(text).width;
+                const padding = 10;
+                // Place label inside bar if it fits, otherwise outside
+                if (barWidth > textWidth + padding * 2) {
+                    ctx.fillStyle = '#fff';
+                    ctx.textAlign = 'right';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(text, bar.x - padding, bar.y);
+                } else {
+                    ctx.fillStyle = '#334155';
+                    ctx.textAlign = 'left';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(text, bar.x + 6, bar.y);
+                }
+                ctx.restore();
+            });
+        }
+    };
+
     avgPriceChart = new Chart(canvas.getContext('2d'), {
         type: 'bar',
         data: {
             labels,
             datasets: [{
-                label: 'Средняя цена (₽)',
+                label: 'Средняя цена (\u20BD)',
                 data: values,
                 backgroundColor: colors.map(c => c + 'cc'),
                 borderColor: colors,
@@ -473,12 +506,13 @@ async function renderAvgPriceReport() {
                 borderRadius: 6,
             }]
         },
+        plugins: [barLabelPlugin],
         options: {
             indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
             layout: {
-                padding: { left: 12, right: 16 }
+                padding: { left: 12, right: 60 }
             },
             plugins: {
                 legend: { display: false },
@@ -486,7 +520,7 @@ async function renderAvgPriceReport() {
             },
             scales: {
                 x: {
-                    ticks: { color: '#64748b', font: { weight: '600' }, callback: v => v.toLocaleString() + ' ₽' },
+                    ticks: { color: '#64748b', font: { weight: '600' }, callback: v => v.toLocaleString() + ' \u20BD' },
                     grid: { color: '#f1f5f9' }
                 },
                 y: {

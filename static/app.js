@@ -324,7 +324,17 @@ function _positionPanel(wrapper, trigger, panel) {
 function refreshCustomDropdown(selectEl) {
     const wrapper = selectEl._ddWrapper;
     if (!wrapper) return;
-    _renderDdOptions(selectEl, wrapper._ddOptList);
+    // Rebuild options, respecting disabled/hidden ones
+    const optList = wrapper._ddOptList;
+    optList.innerHTML = '';
+    Array.from(selectEl.options).forEach(o => {
+        if (o.disabled || o.style.display === 'none') return;
+        const div = document.createElement('div');
+        div.className = 'dd-option' + (o.selected ? ' selected' : '');
+        div.dataset.value = o.value;
+        div.textContent = o.textContent;
+        optList.appendChild(div);
+    });
     const currentOpt = selectEl.options[selectEl.selectedIndex];
     wrapper._ddTrigger.querySelector('.dd-label').textContent = currentOpt ? currentOpt.textContent : '';
 }
@@ -1931,6 +1941,41 @@ window.toggleXmlSelectAll = toggleXmlSelectAll;
 window.updateXmlSelectedCount = updateXmlSelectedCount;
 window.closeXmlImportModal = closeXmlImportModal;
 window.confirmXmlImport = confirmXmlImport;
+
+// --- Mapping Category Filter + Search ---
+
+function filterMappingProducts() {
+    const catId = document.getElementById('mappingCategoryFilter')?.value || 'all';
+    const sel = document.getElementById('productSelect');
+    if (!sel) return;
+
+    // Filter options in the hidden <select>
+    Array.from(sel.options).forEach(opt => {
+        const optCat = opt.getAttribute('data-category') || '';
+        const show = (catId === 'all' || optCat === catId);
+        opt.style.display = show ? '' : 'none';
+        opt.disabled = !show;
+    });
+
+    // Select first visible option
+    const firstVisible = Array.from(sel.options).find(o => !o.disabled);
+    if (firstVisible) sel.value = firstVisible.value;
+
+    // Refresh the custom dropdown
+    refreshCustomDropdown(sel);
+}
+
+function updateXmlFileName(input) {
+    const label = document.getElementById('xmlFileName');
+    if (label) {
+        label.textContent = input.files.length ? input.files[0].name : 'Выберите файл';
+        label.style.color = input.files.length ? 'var(--text-primary)' : '';
+        label.style.fontWeight = input.files.length ? '600' : '';
+    }
+}
+
+window.filterMappingProducts = filterMappingProducts;
+window.updateXmlFileName = updateXmlFileName;
 
 // --- Mobile Sidebar ---
 

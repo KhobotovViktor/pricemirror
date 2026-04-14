@@ -1112,6 +1112,25 @@ input[type="checkbox"] {
 ::-webkit-scrollbar-thumb:hover { background: var(--text-tertiary); }
 
 /* ================================================================
+   XML FILE INPUT
+   ================================================================ */
+.xml-file-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+    background: var(--bg-surface);
+}
+.xml-file-input-wrapper:hover {
+    border-color: var(--primary);
+    background: var(--primary-ghost);
+}
+
+/* ================================================================
    CUSTOM DROPDOWN COMPONENT
    Replaces native <select> with styled popup dropdowns
    ================================================================ */

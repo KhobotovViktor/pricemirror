@@ -112,7 +112,11 @@
                                 </h3>
                                 <div class="form-group">
                                     <label class="form-label">YML-файл (Yandex Market)</label>
-                                    <input class="form-input" type="file" id="xmlFileInput" accept=".xml,.yml" style="padding:8px;">
+                                    <div class="xml-file-input-wrapper" onclick="document.getElementById('xmlFileInput').click()">
+                                        <i class="fa-solid fa-cloud-arrow-up" style="font-size:1.2rem;color:var(--primary);"></i>
+                                        <span id="xmlFileName" class="text-muted" style="font-size:0.85rem;">Выберите файл</span>
+                                    </div>
+                                    <input type="file" id="xmlFileInput" accept=".xml,.yml" style="display:none;" onchange="updateXmlFileName(this)">
                                 </div>
                                 <button onclick="handleXmlUpload()" class="btn btn-secondary w-full" id="xmlUploadBtn">
                                     <i class="fa-solid fa-upload"></i> Загрузить и показать товары
@@ -129,10 +133,19 @@
                             </h2>
                             <form id="mappingForm">
                                 <div class="form-group">
+                                    <label class="form-label">Товарная группа</label>
+                                    <select class="form-select" id="mappingCategoryFilter" onchange="filterMappingProducts()">
+                                        <option value="all">Все товарные группы</option>
+                                        {% for cat in categories %}
+                                        <option value="{{ cat.id }}">{{ cat.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="form-group">
                                     <label class="form-label">Наш товар</label>
                                     <select class="form-select" id="productSelect" name="product_id" required>
                                         {% for prod in products %}
-                                        <option value="{{ prod.id }}">{{ prod.name }}</option>
+                                        <option value="{{ prod.id }}" data-category="{{ prod.category_id }}">{{ prod.name }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>

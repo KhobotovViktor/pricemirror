@@ -254,6 +254,8 @@ body {
     box-shadow: var(--shadow-card);
     margin-bottom: 24px;
     transition: box-shadow var(--transition-base);
+    min-width: 0;
+    overflow: hidden;
 }
 .card:hover { box-shadow: var(--shadow-sm); }
 .card--flush { padding: 0; }
@@ -294,7 +296,7 @@ body {
    ================================================================ */
 .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
 .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-.grid-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
+.grid-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 24px; }
 .gap-sm { gap: 8px; }  .gap-md { gap: 16px; }  .gap-lg { gap: 24px; }
 .mb-0 { margin-bottom: 0 !important; }
 .mb-sm { margin-bottom: 8px; }  .mb-md { margin-bottom: 16px; }
@@ -414,6 +416,7 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
 .form-input,
 .form-select {
     width: 100%;
+    max-width: 100%;
     padding: 10px 14px;
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
@@ -424,6 +427,7 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
     min-height: 44px;
     outline: none;
+    box-sizing: border-box;
     -webkit-appearance: none;
     appearance: none;
 }
@@ -1196,7 +1200,7 @@ input[type="checkbox"] {
 .custom-dropdown {
     position: relative;
     display: inline-block;
-    min-width: 160px;
+    min-width: min(160px, 100%);
     max-width: 100%;
 }
 
@@ -1206,6 +1210,7 @@ input[type="checkbox"] {
     justify-content: space-between;
     gap: 8px;
     width: 100%;
+    max-width: 100%;
     padding: 10px 14px;
     border-radius: var(--radius-md);
     border: 1px solid var(--border);

@@ -1047,10 +1047,10 @@ input[type="checkbox"] {
     font-weight: 700;
     padding: 1px 5px;
     border-radius: var(--radius-full);
-    min-width: 16px;
     text-align: center;
     line-height: 1.4;
     flex-shrink: 0;
+    width: auto;
 }
 .nav-link:not(.active) .nav-badge {
     background: var(--primary-ghost);
@@ -1137,7 +1137,8 @@ input[type="checkbox"] {
         display: inline;
         font-size: 0.55rem;
         padding: 1px 4px;
-        min-width: 14px;
+        width: auto;
+        min-width: auto;
     }
 
     .main-content { padding: 60px 16px 24px; height: auto; min-height: 100vh; }

@@ -169,13 +169,19 @@ document.addEventListener('DOMContentLoaded', () => {
 // Keeps a hidden <select> in sync for form submissions and JS value reading
 
 let _activeDropdown = null;
+let _activeDropdownPanel = null;
 
 function _closeAllDropdowns(e) {
     if (_activeDropdown) {
         const dd = _activeDropdown;
-        if (!dd.contains(e?.target)) {
+        const panel = _activeDropdownPanel;
+        // Check if click is inside the wrapper OR the detached panel
+        if (!dd.contains(e?.target) && !(panel && panel.contains(e?.target))) {
             dd.classList.remove('open');
+            // Hide the panel (it's on body)
+            if (panel) panel.style.display = 'none';
             _activeDropdown = null;
+            _activeDropdownPanel = null;
         }
     }
 }
@@ -259,6 +265,12 @@ function _buildCustomDropdown(sel) {
         if (!isOpen) {
             wrapper.classList.add('open');
             _activeDropdown = wrapper;
+            _activeDropdownPanel = panel;
+            // Move panel to body to avoid transform-containing-block issues (e.g. inside modals)
+            if (panel.parentNode !== document.body) {
+                document.body.appendChild(panel);
+            }
+            panel.style.display = 'block';
             _positionPanel(wrapper, trigger, panel);
             if (searchInput) { searchInput.value = ''; _filterDdOptions(optList, ''); searchInput.focus(); }
             // Scroll selected into view
@@ -282,7 +294,9 @@ function _buildCustomDropdown(sel) {
         // Update selected state
         optList.querySelectorAll('.dd-option').forEach(o => o.classList.toggle('selected', o.dataset.value === val));
         wrapper.classList.remove('open');
+        panel.style.display = 'none';
         _activeDropdown = null;
+        _activeDropdownPanel = null;
     });
 
     // Store reference for dynamic updates

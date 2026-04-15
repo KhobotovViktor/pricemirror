@@ -1559,7 +1559,7 @@ input[type="checkbox"] {
 }
 
 .xml-import-card {
-    position: absolute;
+    position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
@@ -1644,7 +1644,7 @@ input[type="checkbox"] {
     max-width: calc(100vw - 16px);
 }
 [data-theme="dark"] .custom-dropdown-panel { background: var(--bg-elevated); }
-.custom-dropdown.open .custom-dropdown-panel { display: block; }
+/* Panel is now appended to body and shown/hidden via JS, so remove CSS-based toggle */
 
 .custom-dropdown-search {
     position: sticky;

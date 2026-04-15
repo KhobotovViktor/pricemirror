@@ -484,23 +484,33 @@ async function loadCompetitorProducts() {
             div.dataset.priceStatus = priceStatus;
             
             div.innerHTML = `
-                <div class="competitor-info">
-                    <div class="product-name">${item.our_product_name}</div>
-                    <div class="product-meta">
-                         ${item.store_name} &bull; <a href="${item.url}" target="_blank" style="color:var(--primary);text-decoration:none;">Открыть ссылку <i class="fa-solid fa-external-link" style="font-size:0.6rem;"></i></a>
+                <div class="comp-row">
+                    <div class="comp-main">
+                        <div class="comp-name">${item.our_product_name}</div>
+                        <div class="comp-meta">
+                            <span class="comp-store">${item.store_name}</span>
+                            <a href="${item.url}" target="_blank" class="comp-link">Открыть ссылку <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                        </div>
                     </div>
-                </div>
-                <div class="competitor-prices">
-                    <span style="font-size:0.75rem;color:var(--text-tertiary);font-weight:600;">Наша цена:</span>
-                    <span class="price" style="color:${ourPriceColor};font-size:0.95rem;">${item.our_price.toLocaleString()} \u20BD</span>
-                    <span style="font-size:0.75rem;color:var(--text-tertiary);font-weight:600;margin-top:4px;">Цена конкурента:</span>
-                    <span class="price" style="font-size:0.95rem;">${item.competitor_price ? item.competitor_price.toLocaleString() + ' \u20BD' : 'Сбор...'}</span>
-                </div>
-                <div class="competitor-diff">
-                    <span style="font-size:0.75rem;color:var(--text-tertiary);font-weight:600;">Отклонение:</span>
-                    <div class="status-pill ${item.competitor_price ? diffClass : ''}" style="${!item.competitor_price ? 'opacity:0.5;' : ''}">
-                        ${item.competitor_price ? (diff > 0 ? '+' : '') + diff.toLocaleString() + ' \u20BD' : 'Ожидание'}
+                    <div class="comp-prices-grid">
+                        <div class="comp-price-block">
+                            <span class="comp-price-label">Наша цена</span>
+                            <span class="comp-price-value" style="color:${ourPriceColor}">${item.our_price.toLocaleString()} \u20BD</span>
+                        </div>
+                        <div class="comp-price-block">
+                            <span class="comp-price-label">Цена конкурента</span>
+                            <span class="comp-price-value">${item.competitor_price ? item.competitor_price.toLocaleString() + ' \u20BD' : 'Сбор...'}</span>
+                        </div>
+                        <div class="comp-price-block">
+                            <span class="comp-price-label">Отклонение</span>
+                            <div class="status-pill ${item.competitor_price ? diffClass : ''}" style="${!item.competitor_price ? 'opacity:0.5;' : ''}">
+                                ${item.competitor_price ? (diff > 0 ? '+' : '') + diff.toLocaleString() + ' \u20BD' : 'Ожидание'}
+                            </div>
+                        </div>
                     </div>
+                    <button class="comp-delete-btn" onclick="deleteMapping(${item.id}, this)" title="Удалить сопоставление">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
                 </div>
             `;
             listContainer.appendChild(div);
@@ -1780,6 +1790,29 @@ async function saveOurStoreColor() {
 window.handleAnalytics = (btn) => displayProductAnalytics(btn.getAttribute('data-id'));
 window.handleDelete = (btn) => deleteProductById(btn);
 window.handleCategoryEdit = handleCategoryEdit;
+
+// Delete a competitor mapping
+async function deleteMapping(mappingId, btn) {
+    if (!confirm('Удалить это сопоставление? Все данные о ценах конкурента для этой связки будут удалены.')) return;
+    const row = btn.closest('.competitor-product-item');
+    if (row) row.style.opacity = '0.4';
+    try {
+        const resp = await fetch(`/api/mappings/${mappingId}`, { method: 'DELETE', credentials: 'include' });
+        if (resp.ok) {
+            if (row) { row.style.transition = 'all .3s'; row.style.maxHeight = '0'; row.style.opacity = '0'; row.style.overflow = 'hidden'; row.style.padding = '0'; row.style.margin = '0'; setTimeout(() => row.remove(), 300); }
+            loadDashboardStats();
+        } else {
+            const err = await resp.json();
+            alert('Ошибка: ' + (err.detail || 'Не удалось удалить'));
+            if (row) row.style.opacity = '1';
+        }
+    } catch (e) {
+        alert('Ошибка сети: ' + e.message);
+        if (row) row.style.opacity = '1';
+    }
+}
+window.deleteMapping = deleteMapping;
+
 window.closeAnalytics = () => {
     const s = document.getElementById('analyticsSection');
     const o = document.getElementById('modalOverlay');

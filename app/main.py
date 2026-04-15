@@ -1039,6 +1039,21 @@ async def delete_single_product(product_id: int, user_id: str = Depends(get_curr
         print(f"DELETE ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/api/mappings/{mapping_id}")
+async def delete_mapping(mapping_id: int, user_id: str = Depends(get_current_user)):
+    """Delete a single competitor mapping and its price records."""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        # 1. Delete price records
+        supabase.table("price_record").delete().eq("competitor_product_id", mapping_id).execute()
+        # 2. Delete mapping
+        supabase.table("competitor_product").delete().eq("id", mapping_id).execute()
+        return {"status": "success", "message": "Сопоставление удалено"}
+    except Exception as e:
+        print(f"DELETE MAPPING ERROR: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.patch("/api/products/{product_id}")
 async def update_product(
     product_id: int, 

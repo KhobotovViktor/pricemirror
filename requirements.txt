@@ -10,3 +10,4 @@ apscheduler
 PyJWT
 starlette
 httpx
+bcrypt

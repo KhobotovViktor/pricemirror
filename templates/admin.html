@@ -9,6 +9,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
+    <!-- CSRF Token for AJAX requests -->
+    <script>window.__CSRF_TOKEN__ = "{{ csrf_token }}";</script>
     <!-- Burger Menu (mobile) -->
     <button class="burger-btn" id="burgerBtn" onclick="toggleMobileSidebar()" aria-label="Menu">
         <i class="fa-solid fa-bars"></i>

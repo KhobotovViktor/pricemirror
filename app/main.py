@@ -25,6 +25,23 @@ import traceback
 from dotenv import load_dotenv
 from pathlib import Path
 from .core.database import supabase
+from collections import defaultdict
+import hashlib
+import hmac
+import secrets
+
+# bcrypt for password hashing (falls back to plain-text comparison if not installed)
+try:
+    import bcrypt
+    BCRYPT_AVAILABLE = True
+except ImportError:
+    BCRYPT_AVAILABLE = False
+    print("WARNING: bcrypt not installed. Password stored as plain text. Run: pip install bcrypt")
+
+# Rate limiting state for login endpoint (in-memory)
+_login_attempts = defaultdict(list)  # IP -> list of timestamps
+RATE_LIMIT_WINDOW = 300  # 5 minutes
+RATE_LIMIT_MAX = 5  # max attempts per window
 
 # Optional imports for Vercel 'Slim' compatibility
 try:
@@ -88,7 +105,31 @@ app = FastAPI(title="Furniture Competitor Monitor", lifespan=lifespan)
 SECRET_KEY = os.getenv("SECRET_KEY", "FURNITURE_MONITOR_SECRET_PROD") 
 ALGORITHM = "HS256"
 COOKIE_NAME = "auth_token"
+CSRF_HEADER_NAME = "x-csrf-token"
 auth_cookie = APIKeyCookie(name=COOKIE_NAME, auto_error=False)
+
+# CSRF protection middleware: validates token on state-changing requests
+# Exempt paths: /api/login (no session yet), /api/scrape/* (internal), /api/debug/*
+CSRF_EXEMPT_PATHS = {"/api/login"}
+CSRF_EXEMPT_PREFIXES = ("/api/scrape/", "/api/debug/")
+
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class CSRFMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            path = request.url.path
+            # Skip CSRF for exempt paths
+            if path not in CSRF_EXEMPT_PATHS and not any(path.startswith(p) for p in CSRF_EXEMPT_PREFIXES):
+                csrf_token = request.headers.get(CSRF_HEADER_NAME, "")
+                if not verify_csrf_token(csrf_token):
+                    return JSONResponse(
+                        status_code=403,
+                        content={"status": "error", "message": "CSRF token invalid or missing"}
+                    )
+        return await call_next(request)
+
+app.add_middleware(CSRFMiddleware)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -108,6 +149,44 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expires})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
+def generate_csrf_token():
+    """Generate a signed CSRF token using HMAC + random nonce."""
+    nonce = secrets.token_hex(16)
+    sig = hmac.new(SECRET_KEY.encode(), nonce.encode(), hashlib.sha256).hexdigest()[:16]
+    return f"{nonce}.{sig}"
+
+def verify_csrf_token(token: str) -> bool:
+    """Verify CSRF token signature."""
+    if not token or '.' not in token:
+        return False
+    nonce, sig = token.rsplit('.', 1)
+    expected = hmac.new(SECRET_KEY.encode(), nonce.encode(), hashlib.sha256).hexdigest()[:16]
+    return hmac.compare_digest(sig, expected)
+
+def _check_rate_limit(ip: str) -> bool:
+    """Returns True if the IP is rate-limited (too many login attempts)."""
+    now = time.time()
+    # Clean up old attempts
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < RATE_LIMIT_WINDOW]
+    return len(_login_attempts[ip]) >= RATE_LIMIT_MAX
+
+def _record_login_attempt(ip: str):
+    """Record a failed login attempt for rate limiting."""
+    _login_attempts[ip].append(time.time())
+
+def _verify_password(plain_password: str, stored_password: str) -> bool:
+    """Verify password against stored hash (bcrypt) or plain text (legacy fallback)."""
+    if BCRYPT_AVAILABLE and stored_password.startswith("$2b$"):
+        return bcrypt.checkpw(plain_password.encode('utf-8'), stored_password.encode('utf-8'))
+    # Legacy plain-text fallback
+    return plain_password == stored_password
+
+def _hash_password(plain_password: str) -> str:
+    """Hash a password with bcrypt. Returns the hash string."""
+    if BCRYPT_AVAILABLE:
+        return bcrypt.hashpw(plain_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    return plain_password
+
 async def get_current_user(token: str = Depends(auth_cookie)):
     if not token:
         return None
@@ -117,14 +196,17 @@ async def get_current_user(token: str = Depends(auth_cookie)):
     except Exception:
         return None
 
-# Get absolute path to this file's directory
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "..", "static")), name="static")
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "..", "templates"))
+# Resolving paths relative to the project root
+ROOT_DIR = Path(__file__).parent.parent.resolve()
+STATIC_DIR = ROOT_DIR / "static"
+TEMPLATES_DIR = ROOT_DIR / "templates"
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 scheduler = AsyncIOScheduler()
 
 @app.get("/api/report/pdf")
-async def get_pdf_report(user_id: str = Depends(get_current_user)):
+async def get_pdf_report(request: Request, user_id: str = Depends(get_current_user)):
     """Generates a professional PDF report for stakeholders"""
     if not user_id:
         return RedirectResponse(url="/login")
@@ -173,19 +255,6 @@ async def get_pdf_report(user_id: str = Depends(get_current_user)):
                 "products": products
             }
         )
-
-        pdf_output = io.BytesIO()
-        pisa_status = pisa.CreatePDF(io.StringIO(html_content), dest=pdf_output)
-        
-        if pisa_status.err:
-            raise HTTPException(status_code=500, detail="Error generating PDF")
-            
-        pdf_output.seek(0)
-        return StreamingResponse(
-            iter([pdf_output.getvalue()]), 
-            media_type="application/pdf",
-            headers={"Content-Disposition": "inline; filename=report.pdf"}
-        )
     except Exception as e:
         print(f"PDF ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -196,11 +265,21 @@ async def get_login_page(request: Request):
     return templates.TemplateResponse(request, "login.html", {"request": request})
 
 @app.post("/api/login")
-async def post_login(username: str = Form(...), password: str = Form(...)):
-    """Validates username + password and sets JWT cookie"""
+async def post_login(request: Request, username: str = Form(...), password: str = Form(...)):
+    """Validates username + password with rate limiting, bcrypt hashing, and sets JWT cookie"""
+    client_ip = request.client.host if request.client else "unknown"
+    
+    # Rate limiting check
+    if _check_rate_limit(client_ip):
+        return JSONResponse(
+            status_code=429,
+            content={"status": "error", "message": "Слишком много попыток входа. Попробуйте через 5 минут."}
+        )
+    
     try:
         # Check Username
         if username != "Хоботов Виктор":
+            _record_login_attempt(client_ip)
             return JSONResponse(status_code=401, content={"status": "error", "message": "Неверный логин или пароль"})
 
         # Check Password from DB
@@ -208,9 +287,20 @@ async def post_login(username: str = Form(...), password: str = Form(...)):
         if not resp.data:
             raise HTTPException(status_code=500, detail="Пароль не настроен в БД")
         
-        correct_password = resp.data[0]['value']
-        if password != correct_password:
+        stored_password = resp.data[0]['value']
+        
+        if not _verify_password(password, stored_password):
+            _record_login_attempt(client_ip)
             return JSONResponse(status_code=401, content={"status": "error", "message": "Неверный логин или пароль"})
+        
+        # Auto-migrate plain-text password to bcrypt hash
+        if BCRYPT_AVAILABLE and not stored_password.startswith("$2b$"):
+            hashed = _hash_password(password)
+            supabase.table("system_settings").update({"value": hashed}).eq("key", "admin_password").execute()
+            print("INFO: admin_password migrated to bcrypt hash")
+        
+        # Clear rate limit on successful login
+        _login_attempts.pop(client_ip, None)
         
         token = create_access_token({"sub": "admin", "username": username})
         response = JSONResponse(content={"status": "success", "message": f"Добро пожаловать, {username}!"})
@@ -226,14 +316,6 @@ async def logout():
     response.delete_cookie(COOKIE_NAME)
     return response
 
-
-# Resolving paths relative to the project root
-ROOT_DIR = Path(__file__).parent.parent.resolve()
-STATIC_DIR = ROOT_DIR / "static"
-TEMPLATES_DIR = ROOT_DIR / "templates"
-
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 # Utility to detect store from URL
 def detect_store(url: str):
@@ -285,13 +367,17 @@ async def get_admin_panel(request: Request, user_id: str = Depends(get_current_u
             p['price_status'] = status
             products.append(p)
 
+        # Generate CSRF token for this session
+        csrf_token = generate_csrf_token()
+
         return templates.TemplateResponse(
             request,
             "admin.html", 
             {
                 "request": request, 
                 "categories": categories,
-                "products": products
+                "products": products,
+                "csrf_token": csrf_token
             }
         )
     except Exception as e:

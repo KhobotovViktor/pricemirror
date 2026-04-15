@@ -1,6 +1,25 @@
 // Furniture Monitor Admin JS - PREMIUM Feedback Style
 // Synchronized with new style.css and admin.html structure
 
+// CSRF helper: inject X-CSRF-Token header into all mutating fetch requests
+const _origFetch = window.fetch;
+window.fetch = function(url, options = {}) {
+    if (options.method && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(options.method.toUpperCase())) {
+        if (!options.headers) options.headers = {};
+        // Support both Headers object and plain object
+        if (options.headers instanceof Headers) {
+            if (!options.headers.has('x-csrf-token')) {
+                options.headers.set('x-csrf-token', window.__CSRF_TOKEN__ || '');
+            }
+        } else {
+            if (!options.headers['x-csrf-token']) {
+                options.headers['x-csrf-token'] = window.__CSRF_TOKEN__ || '';
+            }
+        }
+    }
+    return _origFetch.call(this, url, options);
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     // 0. Initial Load 
     initCustomDropdowns();

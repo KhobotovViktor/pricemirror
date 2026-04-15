@@ -861,8 +861,13 @@ input[type="checkbox"] {
    SETTINGS SECTION
    ================================================================ */
 .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
-.settings-actions { display: flex; gap: 12px; align-items: center; }
+.settings-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .settings-result { font-size: 0.875rem; font-weight: 600; }
+
+/* User list table in settings */
+.user-list table { width: 100%; border-collapse: collapse; }
+.user-list th { font-size: 0.75rem; text-transform: uppercase; color: var(--text-tertiary); letter-spacing: 0.03em; }
+.user-list td { vertical-align: middle; }
 
 /* Store color row */
 .store-color-row {
@@ -1561,9 +1566,12 @@ input[type="checkbox"] {
     width: 90%;
     max-width: 800px;
     max-height: 85vh;
-    overflow: hidden;
+    overflow: visible;
     display: flex;
     flex-direction: column;
+}
+.xml-import-card .custom-dropdown-panel {
+    z-index: 10000;
 }
 
 /* ================================================================

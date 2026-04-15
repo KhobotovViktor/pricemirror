@@ -266,7 +266,8 @@ async def get_login_page(request: Request):
 
 @app.post("/api/login")
 async def post_login(request: Request, username: str = Form(...), password: str = Form(...)):
-    """Validates username + password with rate limiting, bcrypt hashing, and sets JWT cookie"""
+    """Validates username + password with rate limiting, bcrypt hashing, and sets JWT cookie.
+    Supports multi-user via app_user table with fallback to legacy system_settings."""
     client_ip = request.client.host if request.client else "unknown"
     
     # Rate limiting check
@@ -277,12 +278,41 @@ async def post_login(request: Request, username: str = Form(...), password: str 
         )
     
     try:
-        # Check Username
+        # Try app_user table first (multi-user mode)
+        user = None
+        try:
+            resp = supabase.table("app_user").select("*").eq("username", username).eq("is_active", True).execute()
+            if resp.data:
+                user = resp.data[0]
+        except Exception:
+            pass  # Table may not exist yet, fall back to legacy
+
+        if user:
+            # Multi-user mode: verify against app_user table
+            if not _verify_password(password, user['password_hash']):
+                _record_login_attempt(client_ip)
+                return JSONResponse(status_code=401, content={"status": "error", "message": "Неверный логин или пароль"})
+            
+            # Auto-migrate plain-text to bcrypt
+            if BCRYPT_AVAILABLE and not user['password_hash'].startswith("$2b$"):
+                hashed = _hash_password(password)
+                supabase.table("app_user").update({"password_hash": hashed}).eq("id", user['id']).execute()
+            
+            _login_attempts.pop(client_ip, None)
+            token = create_access_token({
+                "sub": str(user['id']),
+                "username": user['display_name'],
+                "role": user['role']
+            })
+            response = JSONResponse(content={"status": "success", "message": f"Добро пожаловать, {user['display_name']}!"})
+            response.set_cookie(key=COOKIE_NAME, value=token, httponly=True, max_age=3600*24)
+            return response
+        
+        # Legacy fallback: hardcoded admin via system_settings
         if username != "Хоботов Виктор":
             _record_login_attempt(client_ip)
             return JSONResponse(status_code=401, content={"status": "error", "message": "Неверный логин или пароль"})
 
-        # Check Password from DB
         resp = supabase.table("system_settings").select("*").eq("key", "admin_password").execute()
         if not resp.data:
             raise HTTPException(status_code=500, detail="Пароль не настроен в БД")
@@ -293,16 +323,12 @@ async def post_login(request: Request, username: str = Form(...), password: str 
             _record_login_attempt(client_ip)
             return JSONResponse(status_code=401, content={"status": "error", "message": "Неверный логин или пароль"})
         
-        # Auto-migrate plain-text password to bcrypt hash
         if BCRYPT_AVAILABLE and not stored_password.startswith("$2b$"):
             hashed = _hash_password(password)
             supabase.table("system_settings").update({"value": hashed}).eq("key", "admin_password").execute()
-            print("INFO: admin_password migrated to bcrypt hash")
         
-        # Clear rate limit on successful login
         _login_attempts.pop(client_ip, None)
-        
-        token = create_access_token({"sub": "admin", "username": username})
+        token = create_access_token({"sub": "admin", "username": username, "role": "admin"})
         response = JSONResponse(content={"status": "success", "message": f"Добро пожаловать, {username}!"})
         response.set_cookie(key=COOKIE_NAME, value=token, httponly=True, max_age=3600*24)
         return response
@@ -810,11 +836,13 @@ async def get_settings():
 
 @app.post("/api/settings")
 async def save_settings(request: Request):
-    """Saves updated system configuration"""
+    """Saves updated system configuration (upsert to handle new keys)"""
     try:
         data = await request.json()
         for key, value in data.items():
-            supabase.table("system_settings").update({"value": str(value)}).eq("key", key).execute()
+            supabase.table("system_settings").upsert(
+                {"key": key, "value": str(value)}, on_conflict="key"
+            ).execute()
         return {"status": "success", "message": "Настройки сохранены"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -1245,6 +1273,37 @@ async def update_our_store_color(color: str = Form(...), user_id: str = Depends(
 
 # --- Bitrix24 Integration ---
 
+@app.post("/api/telegram/test")
+async def test_telegram(user_id: str = Depends(get_current_user)):
+    """Sends a test message to the configured Telegram chat"""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        from .core.notifier import notifier
+        settings = notifier.get_settings()
+        token = settings.get("telegram_bot_token")
+        chat_id = settings.get("telegram_chat_id")
+
+        if not token or not chat_id:
+            return {"status": "error", "message": "Telegram Bot Token или Chat ID не настроены"}
+
+        import requests as _req
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": "<b>Price Mirror</b> — тестовое сообщение.\nИнтеграция с Telegram работает!",
+            "parse_mode": "HTML"
+        }
+        resp = _req.post(url, json=payload, timeout=10)
+        data = resp.json()
+        if resp.status_code == 200 and data.get("ok"):
+            return {"status": "success", "message": f"Сообщение отправлено (message_id: {data['result']['message_id']})"}
+        else:
+            error_desc = data.get("description", str(data))
+            return {"status": "error", "message": f"Ошибка Telegram API: {error_desc}"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+
 @app.post("/api/bitrix24/test")
 async def test_bitrix24(user_id: str = Depends(get_current_user)):
     """Sends a test message to the configured Bitrix24 group chat"""
@@ -1270,5 +1329,93 @@ async def save_bitrix24_settings(request: Request, user_id: str = Depends(get_cu
                 {"key": key, "value": str(value)}, on_conflict="key"
             ).execute()
         return {"status": "success", "message": "Настройки Битрикс24 сохранены"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# --- User Management (Multi-user) ---
+
+@app.get("/api/users")
+async def list_users(user_id: str = Depends(get_current_user)):
+    """List all users (admin only)."""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        resp = supabase.table("app_user").select("id, username, display_name, role, is_active, created_at").order("created_at").execute()
+        return resp.data
+    except Exception as e:
+        # Table may not exist yet
+        return []
+
+@app.post("/api/users")
+async def create_user(request: Request, user_id: str = Depends(get_current_user)):
+    """Create a new user (admin only)."""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        data = await request.json()
+        username = data.get("username", "").strip()
+        display_name = data.get("display_name", "").strip()
+        password = data.get("password", "")
+        role = data.get("role", "manager")
+
+        if not username or not password or not display_name:
+            raise HTTPException(status_code=400, detail="Все поля обязательны")
+        if role not in ("admin", "manager"):
+            role = "manager"
+
+        password_hash = _hash_password(password)
+        result = supabase.table("app_user").insert({
+            "username": username,
+            "display_name": display_name,
+            "password_hash": password_hash,
+            "role": role,
+            "is_active": True
+        }).execute()
+        if result.data:
+            user = result.data[0]
+            return {"status": "success", "message": f"Пользователь '{display_name}' создан", "user": {
+                "id": user["id"], "username": user["username"],
+                "display_name": user["display_name"], "role": user["role"]
+            }}
+        raise HTTPException(status_code=500, detail="Ошибка создания пользователя")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.patch("/api/users/{uid}")
+async def update_user(uid: int, request: Request, user_id: str = Depends(get_current_user)):
+    """Update user fields (admin only). Supports: display_name, role, is_active, password."""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        data = await request.json()
+        update = {}
+        if "display_name" in data:
+            update["display_name"] = data["display_name"]
+        if "role" in data and data["role"] in ("admin", "manager"):
+            update["role"] = data["role"]
+        if "is_active" in data:
+            update["is_active"] = bool(data["is_active"])
+        if "password" in data and data["password"]:
+            update["password_hash"] = _hash_password(data["password"])
+
+        if not update:
+            return {"status": "error", "message": "Нет данных для обновления"}
+
+        supabase.table("app_user").update(update).eq("id", uid).execute()
+        return {"status": "success", "message": "Пользователь обновлён"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/users/{uid}")
+async def delete_user(uid: int, user_id: str = Depends(get_current_user)):
+    """Delete a user (admin only)."""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        supabase.table("app_user").delete().eq("id", uid).execute()
+        return {"status": "success", "message": "Пользователь удалён"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

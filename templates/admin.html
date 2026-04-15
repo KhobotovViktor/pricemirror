@@ -504,9 +504,15 @@
                                 </label>
                                 <input class="form-input" type="number" id="set_scan_interval_hours" min="1" max="168" placeholder="12">
                             </div>
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fa-solid fa-cloud-arrow-up"></i> Сохранить настройки
-                            </button>
+                            <div class="settings-actions">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i> Сохранить настройки
+                                </button>
+                                <button type="button" class="btn btn-secondary" onclick="window.testTelegram()">
+                                    <i class="fa-brands fa-telegram"></i> Тест Telegram
+                                </button>
+                                <div id="telegramTestResult" class="settings-result"></div>
+                            </div>
                         </form>
                     </div>
 
@@ -561,6 +567,49 @@
                         </div>
                         <div id="storeColorList"></div>
                     </div>
+
+                    <!-- User Management -->
+                    <div class="card max-w-md mt-lg">
+                        <h2 class="section-title">
+                            <i class="fa-solid fa-users-gear" style="color:var(--primary)"></i>
+                            Управление пользователями
+                        </h2>
+                        <p class="text-muted text-sm mb-lg">
+                            Создавайте учётные записи для сотрудников. Роль <b>admin</b> — полный доступ, <b>manager</b> — только просмотр и отчёты.
+                        </p>
+
+                        <!-- Add user form -->
+                        <div class="settings-grid mb-lg">
+                            <div class="form-group mb-0">
+                                <label class="form-label">Логин</label>
+                                <input class="form-input" type="text" id="newUserLogin" placeholder="ivan.petrov">
+                            </div>
+                            <div class="form-group mb-0">
+                                <label class="form-label">Отображаемое имя</label>
+                                <input class="form-input" type="text" id="newUserDisplayName" placeholder="Иван Петров">
+                            </div>
+                            <div class="form-group mb-0">
+                                <label class="form-label">Пароль</label>
+                                <input class="form-input" type="password" id="newUserPassword" placeholder="Минимум 4 символа">
+                            </div>
+                            <div class="form-group mb-0">
+                                <label class="form-label">Роль</label>
+                                <select class="form-select" id="newUserRole">
+                                    <option value="manager">Manager</option>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="settings-actions mb-lg">
+                            <button type="button" class="btn btn-primary" onclick="window.createUser()">
+                                <i class="fa-solid fa-user-plus"></i> Создать пользователя
+                            </button>
+                            <div id="userCreateResult" class="settings-result"></div>
+                        </div>
+
+                        <!-- Users list -->
+                        <div id="usersList" class="user-list"></div>
+                    </div>
                 </section>
 
                 <!-- ═══════ ANALYTICS MODAL ═══════ -->
@@ -597,6 +646,8 @@
     <!-- XML Import Preview Modal -->
     <div id="xmlImportModal" class="modal-overlay" style="display:none;z-index:200;">
         <div class="card xml-import-card">
+            <!-- Hidden categories data for JS -->
+            <script>window.__CATEGORIES__ = [{% for cat in categories %}{"id":{{ cat.id }},"name":"{{ cat.name }}"}{% if not loop.last %},{% endif %}{% endfor %}];</script>
             <div class="flex justify-between items-center mb-md">
                 <h2 class="section-title" style="margin:0">
                     <i class="fa-solid fa-file-import" style="color:var(--primary)"></i>

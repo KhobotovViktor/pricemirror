@@ -1918,30 +1918,54 @@ function renderXmlPreview() {
         return;
     }
 
+    // Build category options HTML from global categories list
+    const cats = window.__CATEGORIES__ || [];
+    const catOptionsHtml = cats.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
     let html = '<table style="width:100%;border-collapse:collapse;font-size:0.82rem;">';
     html += '<thead><tr style="border-bottom:2px solid var(--border-soft);position:sticky;top:0;background:var(--bg-card);z-index:1;">';
     html += '<th style="padding:8px;width:30px;"></th>';
     html += '<th style="padding:8px;text-align:left;">Название</th>';
     html += '<th style="padding:8px;text-align:left;min-width:100px;">Группа (XML)</th>';
-    html += '<th style="padding:8px;text-align:left;min-width:100px;">Товарная группа</th>';
+    html += '<th style="padding:8px;text-align:left;min-width:140px;">Товарная группа</th>';
     html += '</tr></thead><tbody>';
 
     for (let i = 0; i < _xmlParsedOffers.length; i++) {
         const o = _xmlParsedOffers[i];
-        const resolved = o.resolved_category_name || '';
-        const resolvedBadge = resolved
-            ? `<span style="color:var(--success);font-weight:600;">${resolved}</span>`
-            : '<span style="color:var(--text-tertiary);">—</span>';
+        const resolvedId = o.resolved_category_id || '';
+
         html += `<tr class="xml-offer-row" data-index="${i}" data-xml-cat="${o.xml_category_id || ''}" data-name="${(o.name || '').toLowerCase()}" style="border-bottom:1px solid var(--border-soft);">`;
         html += `<td style="padding:6px 8px;"><input type="checkbox" class="xml-offer-checkbox" data-index="${i}" checked onchange="updateXmlSelectedCount()"></td>`;
         html += `<td style="padding:6px 8px;font-weight:600;" title="${o.url}">${o.name}</td>`;
         html += `<td style="padding:6px 8px;font-size:0.75rem;color:var(--text-muted);">${o.xml_category_name || '—'}</td>`;
-        html += `<td style="padding:6px 8px;font-size:0.75rem;">${resolvedBadge}</td>`;
+        html += `<td style="padding:6px 8px;font-size:0.75rem;">`;
+        html += `<select class="xml-row-category" data-index="${i}" style="width:100%;padding:4px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-surface);color:var(--text-primary);font-size:0.75rem;">`;
+        html += `<option value="">— по умолчанию —</option>`;
+        html += catOptionsHtml.replace(
+            resolvedId ? `value="${resolvedId}"` : '____NOMATCH____',
+            resolvedId ? `value="${resolvedId}" selected` : '____NOMATCH____'
+        );
+        html += `</select>`;
+        html += `</td>`;
         html += '</tr>';
     }
 
     html += '</tbody></table>';
     container.innerHTML = html;
+
+    // Bind category change to update internal data
+    container.querySelectorAll('.xml-row-category').forEach(sel => {
+        sel.addEventListener('change', function() {
+            const idx = parseInt(this.dataset.index);
+            const offer = _xmlParsedOffers[idx];
+            if (offer) {
+                const val = this.value ? parseInt(this.value) : null;
+                offer.resolved_category_id = val;
+                offer.resolved_category_name = val ? (cats.find(c => c.id === val)?.name || '') : '';
+            }
+        });
+    });
+
     updateXmlSelectedCount();
 }
 
@@ -2177,6 +2201,140 @@ window.testBitrix24 = async () => {
         }
     }
 };
+
+// --- Telegram Test ---
+window.testTelegram = async () => {
+    const resultDiv = document.getElementById('telegramTestResult');
+    if (resultDiv) {
+        resultDiv.innerHTML = '<span style="color: var(--primary);"><i class="fa-solid fa-spinner fa-spin"></i> Отправка тестового сообщения в Telegram...</span>';
+    }
+
+    try {
+        const response = await fetch('/api/telegram/test', { method: 'POST' });
+        const data = await response.json();
+
+        if (resultDiv) {
+            if (data.status === 'success') {
+                resultDiv.innerHTML = `<span style="color: var(--success);"><i class="fa-solid fa-check-circle"></i> ${data.message}</span>`;
+            } else {
+                resultDiv.innerHTML = `<span style="color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i> ${data.message}</span>`;
+            }
+        }
+    } catch (err) {
+        console.error('Telegram test error:', err);
+        if (resultDiv) {
+            resultDiv.innerHTML = '<span style="color: var(--danger);">Ошибка соединения с сервером</span>';
+        }
+    }
+};
+
+// --- User Management ---
+
+async function loadUsers() {
+    const container = document.getElementById('usersList');
+    if (!container) return;
+    try {
+        const resp = await fetch('/api/users');
+        const users = await resp.json();
+        if (!Array.isArray(users) || users.length === 0) {
+            container.innerHTML = '<p class="text-muted text-sm" style="padding:12px;">Пользователи не найдены. Используется режим совместимости (system_settings).</p>';
+            return;
+        }
+        let html = '<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">';
+        html += '<thead><tr style="border-bottom:2px solid var(--border);">';
+        html += '<th style="padding:8px;text-align:left;">Имя</th>';
+        html += '<th style="padding:8px;text-align:left;">Логин</th>';
+        html += '<th style="padding:8px;text-align:center;">Роль</th>';
+        html += '<th style="padding:8px;text-align:center;">Статус</th>';
+        html += '<th style="padding:8px;text-align:right;">Действия</th>';
+        html += '</tr></thead><tbody>';
+        for (const u of users) {
+            const roleClass = u.role === 'admin' ? 'color:var(--primary);font-weight:700;' : 'color:var(--text-secondary);';
+            const statusBadge = u.is_active
+                ? '<span style="color:var(--success);font-weight:600;">Активен</span>'
+                : '<span style="color:var(--text-tertiary);">Отключён</span>';
+            html += `<tr style="border-bottom:1px solid var(--border-soft);">`;
+            html += `<td style="padding:8px;font-weight:600;">${u.display_name}</td>`;
+            html += `<td style="padding:8px;color:var(--text-muted);">${u.username}</td>`;
+            html += `<td style="padding:8px;text-align:center;"><span style="${roleClass}">${u.role}</span></td>`;
+            html += `<td style="padding:8px;text-align:center;">${statusBadge}</td>`;
+            html += `<td style="padding:8px;text-align:right;">`;
+            if (u.is_active) {
+                html += `<button class="btn btn-secondary btn-sm" style="font-size:0.7rem;padding:3px 8px;" onclick="window.toggleUser(${u.id}, false)">Отключить</button>`;
+            } else {
+                html += `<button class="btn btn-primary btn-sm" style="font-size:0.7rem;padding:3px 8px;" onclick="window.toggleUser(${u.id}, true)">Включить</button>`;
+            }
+            html += ` <button class="btn btn-secondary btn-sm" style="font-size:0.7rem;padding:3px 8px;color:var(--danger);" onclick="window.deleteUser(${u.id}, '${u.display_name}')"><i class="fa-solid fa-trash-can"></i></button>`;
+            html += `</td></tr>`;
+        }
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    } catch (err) {
+        console.error('Load users error:', err);
+        if (container) container.innerHTML = '<p class="text-muted text-sm" style="padding:12px;">Таблица пользователей не создана. Создайте таблицу app_user в Supabase.</p>';
+    }
+}
+
+window.createUser = async () => {
+    const username = document.getElementById('newUserLogin')?.value?.trim();
+    const displayName = document.getElementById('newUserDisplayName')?.value?.trim();
+    const password = document.getElementById('newUserPassword')?.value;
+    const role = document.getElementById('newUserRole')?.value || 'manager';
+    const resultDiv = document.getElementById('userCreateResult');
+
+    if (!username || !displayName || !password || password.length < 4) {
+        if (resultDiv) resultDiv.innerHTML = '<span style="color:var(--danger);">Заполните все поля (пароль мин. 4 символа)</span>';
+        return;
+    }
+
+    try {
+        const resp = await fetch('/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, display_name: displayName, password, role })
+        });
+        const data = await resp.json();
+        if (resp.ok && data.status === 'success') {
+            if (resultDiv) resultDiv.innerHTML = `<span style="color:var(--success);"><i class="fa-solid fa-check-circle"></i> ${data.message}</span>`;
+            document.getElementById('newUserLogin').value = '';
+            document.getElementById('newUserDisplayName').value = '';
+            document.getElementById('newUserPassword').value = '';
+            loadUsers();
+        } else {
+            if (resultDiv) resultDiv.innerHTML = `<span style="color:var(--danger);">${data.detail || data.message || 'Ошибка'}</span>`;
+        }
+    } catch (err) {
+        if (resultDiv) resultDiv.innerHTML = '<span style="color:var(--danger);">Ошибка соединения</span>';
+    }
+};
+
+window.toggleUser = async (id, activate) => {
+    try {
+        await fetch(`/api/users/${id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: activate })
+        });
+        loadUsers();
+    } catch (err) { console.error(err); }
+};
+
+window.deleteUser = async (id, name) => {
+    if (!confirm(`Удалить пользователя "${name}"?`)) return;
+    try {
+        await fetch(`/api/users/${id}`, { method: 'DELETE' });
+        loadUsers();
+    } catch (err) { console.error(err); }
+};
+
+// Load users when settings section is shown
+const _origSwitchSection = window.switchSection;
+if (typeof _origSwitchSection === 'function') {
+    window.switchSection = function(sectionId) {
+        _origSwitchSection(sectionId);
+        if (sectionId === 'settings') loadUsers();
+    };
+}
 
 // --- PDF Report (client-side) ---
 

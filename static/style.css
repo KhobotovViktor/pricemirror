@@ -515,19 +515,20 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
     border-bottom: 1px solid var(--border);
     transition: background var(--transition-fast);
     width: 100%;
+    box-sizing: border-box;
 }
 .competitor-product-item:last-child { border-bottom: none; }
 .competitor-product-item:hover { background: var(--bg-surface-hover); }
 
-.comp-row {
+.comp-card {
     display: flex;
-    align-items: center;
-    gap: 16px;
+    flex-direction: column;
+    gap: 10px;
     width: 100%;
 }
 
-.comp-main {
-    flex: 1;
+.comp-header {
+    width: 100%;
     min-width: 0;
 }
 .comp-name {
@@ -566,16 +567,25 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
 .comp-link:hover { text-decoration: underline; }
 .comp-link i { font-size: 0.55rem; margin-left: 2px; }
 
+.comp-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+}
+
 .comp-prices-grid {
     display: flex;
     gap: 20px;
-    flex-shrink: 0;
     align-items: center;
+    flex: 1;
+    min-width: 0;
 }
 .comp-price-block {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: flex-start;
     gap: 2px;
 }
 .comp-price-label {
@@ -607,7 +617,6 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
     transition: all var(--transition-fast);
     flex-shrink: 0;
     font-size: 0.8rem;
-    margin-left: auto;
 }
 .comp-delete-btn:hover {
     color: var(--danger);
@@ -1339,20 +1348,15 @@ input[type="checkbox"] {
     .batch-bar { flex-wrap: wrap; gap: 8px; }
 
     /* Competitor items mobile layout */
-    .comp-row {
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-    .comp-main {
-        flex: 1 1 100%;
+    .comp-footer {
+        flex-wrap: nowrap;
     }
     .comp-name { font-size: 0.85rem; }
     .comp-meta { font-size: 0.7rem; }
     .comp-prices-grid {
-        flex: 1;
         gap: 12px;
+        flex-wrap: wrap;
     }
-    .comp-price-block { align-items: flex-start; }
     .comp-price-label { font-size: 0.6rem; }
     .comp-price-value { font-size: 0.85rem; }
     .comp-delete-btn {
@@ -1360,7 +1364,6 @@ input[type="checkbox"] {
         width: 30px;
         height: 30px;
         font-size: 0.7rem;
-        margin-left: 0;
     }
 
     /* Statistics header */

@@ -484,33 +484,35 @@ async function loadCompetitorProducts() {
             div.dataset.priceStatus = priceStatus;
             
             div.innerHTML = `
-                <div class="comp-row">
-                    <div class="comp-main">
+                <div class="comp-card">
+                    <div class="comp-header">
                         <div class="comp-name">${item.our_product_name}</div>
                         <div class="comp-meta">
                             <span class="comp-store">${item.store_name}</span>
                             <a href="${item.url}" target="_blank" class="comp-link">Открыть ссылку <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
                         </div>
                     </div>
-                    <div class="comp-prices-grid">
-                        <div class="comp-price-block">
-                            <span class="comp-price-label">Наша цена</span>
-                            <span class="comp-price-value" style="color:${ourPriceColor}">${item.our_price.toLocaleString()} \u20BD</span>
-                        </div>
-                        <div class="comp-price-block">
-                            <span class="comp-price-label">Цена конкурента</span>
-                            <span class="comp-price-value">${item.competitor_price ? item.competitor_price.toLocaleString() + ' \u20BD' : 'Сбор...'}</span>
-                        </div>
-                        <div class="comp-price-block">
-                            <span class="comp-price-label">Отклонение</span>
-                            <div class="status-pill ${item.competitor_price ? diffClass : ''}" style="${!item.competitor_price ? 'opacity:0.5;' : ''}">
-                                ${item.competitor_price ? (diff > 0 ? '+' : '') + diff.toLocaleString() + ' \u20BD' : 'Ожидание'}
+                    <div class="comp-footer">
+                        <div class="comp-prices-grid">
+                            <div class="comp-price-block">
+                                <span class="comp-price-label">Наша цена</span>
+                                <span class="comp-price-value" style="color:${ourPriceColor}">${item.our_price.toLocaleString()} \u20BD</span>
+                            </div>
+                            <div class="comp-price-block">
+                                <span class="comp-price-label">Цена конкурента</span>
+                                <span class="comp-price-value">${item.competitor_price ? item.competitor_price.toLocaleString() + ' \u20BD' : 'Сбор...'}</span>
+                            </div>
+                            <div class="comp-price-block">
+                                <span class="comp-price-label">Отклонение</span>
+                                <div class="status-pill ${item.competitor_price ? diffClass : ''}" style="${!item.competitor_price ? 'opacity:0.5;' : ''}">
+                                    ${item.competitor_price ? (diff > 0 ? '+' : '') + diff.toLocaleString() + ' \u20BD' : 'Ожидание'}
+                                </div>
                             </div>
                         </div>
+                        <button class="comp-delete-btn" onclick="deleteMapping(${item.id}, this)" title="Удалить сопоставление">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
                     </div>
-                    <button class="comp-delete-btn" onclick="deleteMapping(${item.id}, this)" title="Удалить сопоставление">
-                        <i class="fa-solid fa-trash-can"></i>
-                    </button>
                 </div>
             `;
             listContainer.appendChild(div);

@@ -176,8 +176,11 @@ body {
     transition: background var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
     user-select: none;
     min-height: 44px;
+    position: relative;
+    overflow: hidden;
 }
 .nav-link i { font-size: 1.125rem; width: 20px; text-align: center; flex-shrink: 0; }
+.nav-link .nav-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .nav-link:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
 .nav-link.active {
     background: var(--primary-gradient);
@@ -996,9 +999,6 @@ input[type="checkbox"] {
 }
 
 /* Sidebar active indicator */
-.nav-link {
-    position: relative;
-}
 .nav-link.active::before {
     content: '';
     position: absolute;
@@ -1020,6 +1020,7 @@ input[type="checkbox"] {
     min-width: 20px;
     text-align: center;
     line-height: 1.4;
+    flex-shrink: 0;
 }
 .nav-link:not(.active) .nav-badge {
     background: var(--primary-ghost);
@@ -1064,9 +1065,10 @@ input[type="checkbox"] {
 /* Tablet: icon sidebar */
 @media (max-width: 1024px) {
     .app-layout { grid-template-columns: 64px 1fr; }
-    .nav-text, .sidebar-logo span { display: none; }
+    .nav-text, .sidebar-logo span, .nav-badge { display: none; }
     .sidebar { padding: 20px 8px; align-items: center; }
     .nav-link { justify-content: center; padding: 10px; }
+    .nav-link.active::before { left: -8px; }
     .main-content { padding: 24px 20px; }
     .grid-4 { grid-template-columns: repeat(2, 1fr); }
     .settings-grid { grid-template-columns: 1fr; }
@@ -1090,7 +1092,18 @@ input[type="checkbox"] {
     }
     .sidebar.open { left: 0; }
     .sidebar.open .nav-text,
+    .sidebar.open .nav-badge,
     .sidebar.open .sidebar-logo span { display: inline; }
+
+    /* Mobile sidebar nav links: single line */
+    .sidebar.open .nav-link {
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+    }
+    .sidebar.open .nav-link .nav-text {
+        flex: 1;
+        min-width: 0;
+    }
 
     .main-content { padding: 60px 16px 24px; height: auto; min-height: 100vh; }
 

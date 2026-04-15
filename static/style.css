@@ -1013,11 +1013,11 @@ input[type="checkbox"] {
     margin-left: auto;
     background: rgba(255,255,255,.2);
     color: white;
-    font-size: 0.65rem;
-    font-weight: 800;
-    padding: 2px 7px;
+    font-size: 0.6rem;
+    font-weight: 700;
+    padding: 1px 5px;
     border-radius: var(--radius-full);
-    min-width: 20px;
+    min-width: 16px;
     text-align: center;
     line-height: 1.4;
     flex-shrink: 0;

@@ -901,6 +901,7 @@ async def get_dashboard_stats():
         
         return {
             "total_products": len(products),
+            "total_mappings": len(all_mappings),
             "at_risk": at_risk,
             "avg_gap": round(total_gap / at_risk, 2) if at_risk > 0 else 0,
             "last_sync": latest_global_sync.strftime("%d.%m %H:%M") if latest_global_sync else "—"

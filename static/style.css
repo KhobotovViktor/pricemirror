@@ -901,6 +901,132 @@ input[type="checkbox"] {
 .theme-toggle:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
 
 /* ================================================================
+   ANIMATIONS
+   ================================================================ */
+@keyframes fadeSlideUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes countPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+@keyframes shimmer {
+    0% { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+}
+@keyframes pulseGlow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .5; }
+}
+
+/* Stat card entrance animation */
+.card--stat {
+    animation: fadeSlideUp .5s ease-out both;
+}
+.card--stat:nth-child(1) { animation-delay: 0s; }
+.card--stat:nth-child(2) { animation-delay: .08s; }
+.card--stat:nth-child(3) { animation-delay: .16s; }
+.card--stat:nth-child(4) { animation-delay: .24s; }
+
+.stat-value[data-animate] {
+    animation: countPulse .4s ease-out;
+}
+
+/* Skeleton loader */
+.skeleton {
+    background: linear-gradient(90deg, var(--bg-surface-hover) 25%, var(--border) 50%, var(--bg-surface-hover) 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.5s infinite linear;
+    border-radius: var(--radius-md);
+}
+.skeleton-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+}
+.skeleton-circle { width: 48px; height: 48px; border-radius: var(--radius-md); flex-shrink: 0; }
+.skeleton-lines { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.skeleton-line { height: 12px; border-radius: 4px; }
+.skeleton-line--short { width: 40%; }
+.skeleton-line--medium { width: 70%; }
+.skeleton-line--price { width: 80px; height: 16px; margin-left: auto; }
+
+/* Status dot pulse */
+.status-dot-pulse {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    position: relative;
+}
+.status-dot-pulse::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    opacity: 0;
+    animation: pulseGlow 2s ease-out infinite;
+}
+.status-dot-pulse.success { background: var(--success); color: var(--success); }
+.status-dot-pulse.warning { background: var(--warning); color: var(--warning); }
+.status-dot-pulse.danger { background: var(--danger); color: var(--danger); }
+.status-dot-pulse.neutral { background: var(--text-tertiary); color: var(--text-tertiary); }
+.status-dot-pulse.neutral::after { animation: none; }
+
+/* Gradient accent top bar on key cards */
+.card--accent-top {
+    position: relative;
+    overflow: hidden;
+}
+.card--accent-top::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--primary-gradient);
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+/* Sidebar active indicator */
+.nav-link {
+    position: relative;
+}
+.nav-link.active::before {
+    content: '';
+    position: absolute;
+    left: -16px;
+    top: 8px;
+    bottom: 8px;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+    background: white;
+}
+.nav-badge {
+    margin-left: auto;
+    background: rgba(255,255,255,.2);
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: var(--radius-full);
+    min-width: 20px;
+    text-align: center;
+    line-height: 1.4;
+}
+.nav-link:not(.active) .nav-badge {
+    background: var(--primary-ghost);
+    color: var(--primary);
+}
+
+/* ================================================================
    MOBILE BURGER
    ================================================================ */
 .burger-btn {
@@ -1359,7 +1485,7 @@ input[type="checkbox"] {
 }
 
 .category-popup-item:hover {
-    background: var(--bg-hover);
+    background: var(--bg-surface-hover);
 }
 
 .category-popup-item.active {

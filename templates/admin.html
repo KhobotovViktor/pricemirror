@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Price Mirror</title>
     <link rel="stylesheet" href="/static/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -28,12 +28,14 @@
                     <a onclick="switchSection('our-products')" id="nav-our-products" class="nav-link active" role="button" tabindex="0">
                         <i class="fa-solid fa-boxes-stacked"></i>
                         <span class="nav-text">Наши товары</span>
+                        <span class="nav-badge nav-text" id="navBadgeProducts">—</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a onclick="switchSection('competitors')" id="nav-competitors" class="nav-link" role="button" tabindex="0">
                         <i class="fa-solid fa-users-viewfinder"></i>
                         <span class="nav-text">Конкуренты</span>
+                        <span class="nav-badge nav-text" id="navBadgeCompetitors">—</span>
                     </a>
                 </li>
                 <li class="nav-item">
@@ -74,7 +76,7 @@
 
                     <div class="grid-auto mb-lg">
                         <!-- Add Product Card -->
-                        <div class="card">
+                        <div class="card card--accent-top">
                             <h2 class="section-title">
                                 <i class="fa-solid fa-plus-circle" style="color:var(--primary)"></i>
                                 Добавить наш товар
@@ -126,7 +128,7 @@
                         </div>
 
                         <!-- Mapping Card -->
-                        <div class="card">
+                        <div class="card card--accent-top">
                             <h2 class="section-title">
                                 <i class="fa-solid fa-link" style="color:var(--secondary)"></i>
                                 Быстрое сопоставление
@@ -224,10 +226,7 @@
                                 </div>
                                 <div class="product-price-col">
                                     <div class="price">{{ "{:,.0f}".format(prod.current_price or 0).replace(",", " ") }} &#8381;</div>
-                                    <div class="badge badge-{{ prod.price_status }}">
-                                        <span class="badge-dot"></span>
-                                        {{ 'Цена ниже' if prod.price_status == 'success' else 'Цена равна' if prod.price_status == 'warning' else 'Цена выше' if prod.price_status == 'danger' else '—' }}
-                                    </div>
+                                    <span class="status-dot-pulse {{ prod.price_status }}" title="{{ 'Цена ниже' if prod.price_status == 'success' else 'Цена равна' if prod.price_status == 'warning' else 'Цена выше' if prod.price_status == 'danger' else 'Ожидание' }}"></span>
                                 </div>
                                 <div class="product-actions">
                                     <div class="category-edit-wrapper" style="position:relative">
@@ -285,10 +284,11 @@
                             </div>
                         </div>
                         <div id="competitorLinksList">
-                            <div class="text-center" style="padding:48px 0">
-                                <i class="fa-solid fa-circle-notch fa-spin" style="font-size:1.75rem;color:var(--primary);margin-bottom:12px"></i>
-                                <p class="text-muted">Загрузка данных мониторинга...</p>
-                            </div>
+                            <div class="skeleton-row"><div class="skeleton skeleton-circle"></div><div class="skeleton-lines"><div class="skeleton skeleton-line skeleton-line--medium"></div><div class="skeleton skeleton-line skeleton-line--short"></div></div><div class="skeleton skeleton-line--price skeleton"></div></div>
+                            <div class="skeleton-row"><div class="skeleton skeleton-circle"></div><div class="skeleton-lines"><div class="skeleton skeleton-line skeleton-line--medium"></div><div class="skeleton skeleton-line skeleton-line--short"></div></div><div class="skeleton skeleton-line--price skeleton"></div></div>
+                            <div class="skeleton-row"><div class="skeleton skeleton-circle"></div><div class="skeleton-lines"><div class="skeleton skeleton-line skeleton-line--medium"></div><div class="skeleton skeleton-line skeleton-line--short"></div></div><div class="skeleton skeleton-line--price skeleton"></div></div>
+                            <div class="skeleton-row"><div class="skeleton skeleton-circle"></div><div class="skeleton-lines"><div class="skeleton skeleton-line skeleton-line--medium"></div><div class="skeleton skeleton-line skeleton-line--short"></div></div><div class="skeleton skeleton-line--price skeleton"></div></div>
+                            <div class="skeleton-row"><div class="skeleton skeleton-circle"></div><div class="skeleton-lines"><div class="skeleton skeleton-line skeleton-line--medium"></div><div class="skeleton skeleton-line skeleton-line--short"></div></div><div class="skeleton skeleton-line--price skeleton"></div></div>
                         </div>
                     </div>
                 </section>

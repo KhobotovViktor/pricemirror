@@ -446,7 +446,7 @@ async function loadCompetitorProducts() {
     const listContainer = document.getElementById('competitorLinksList');
     if (!listContainer) return;
 
-    listContainer.innerHTML = '<div style="text-align: center; padding: 3rem; opacity: 0.5;"><i class="fa-solid fa-circle-notch fa-spin"></i> Загрузка...</div>';
+    listContainer.innerHTML = Array(5).fill('<div class="skeleton-row"><div class="skeleton skeleton-circle"></div><div class="skeleton-lines"><div class="skeleton skeleton-line skeleton-line--medium"></div><div class="skeleton skeleton-line skeleton-line--short"></div></div><div class="skeleton skeleton-line--price skeleton"></div></div>').join('');
     
     try {
         const response = await fetch('/api/competitor_products/all');
@@ -1662,10 +1662,38 @@ async function loadDashboardStats() {
             statLastSync: document.getElementById('statLastSync')
         };
 
-        if (els.statTotal) els.statTotal.innerText = data.total_products;
-        if (els.statAtRisk) els.statAtRisk.innerText = data.at_risk;
-        if (els.statAvgGap) els.statAvgGap.innerText = `${data.avg_gap.toLocaleString()} ₽`;
+        // Animated counter
+        function animateValue(el, end, suffix = '') {
+            if (!el) return;
+            const start = parseInt(el.innerText) || 0;
+            const diff = end - start;
+            if (diff === 0) { el.innerText = end + suffix; return; }
+            const duration = 600;
+            const steps = 30;
+            const stepTime = duration / steps;
+            let step = 0;
+            const timer = setInterval(() => {
+                step++;
+                const val = Math.round(start + diff * (step / steps));
+                el.innerText = val.toLocaleString('ru-RU') + suffix;
+                if (step >= steps) {
+                    clearInterval(timer);
+                    el.innerText = end.toLocaleString('ru-RU') + suffix;
+                    el.setAttribute('data-animate', '1');
+                }
+            }, stepTime);
+        }
+
+        animateValue(els.statTotal, data.total_products);
+        animateValue(els.statAtRisk, data.at_risk);
+        animateValue(els.statAvgGap, data.avg_gap, ' \u20BD');
         if (els.statLastSync) els.statLastSync.innerText = data.last_sync;
+
+        // Update sidebar badges
+        const badgeProducts = document.getElementById('navBadgeProducts');
+        const badgeCompetitors = document.getElementById('navBadgeCompetitors');
+        if (badgeProducts) badgeProducts.textContent = data.total_products || '0';
+        if (badgeCompetitors) badgeCompetitors.textContent = data.total_mappings || '—';
         
     } catch (err) {
         console.error('Failed to load dashboard stats:', err);

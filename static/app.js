@@ -470,6 +470,10 @@ async function loadCompetitorProducts() {
             const diff = item.competitor_price ? (item.our_price - item.competitor_price) : 0;
             const diffClass = diff > 0 ? 'status-danger' : (diff < 0 ? 'status-success' : '');
 
+            // Color for "our price" label — matches diff direction
+            const ourPriceColor = !item.competitor_price ? 'var(--text-muted)' :
+                diff > 0 ? 'var(--danger)' : diff < 0 ? 'var(--success)' : 'var(--warning)';
+
             // Price status for filtering
             let priceStatus = 'unknown';
             if (item.competitor_price) {
@@ -487,12 +491,14 @@ async function loadCompetitorProducts() {
                     </div>
                 </div>
                 <div class="competitor-prices">
-                    <span class="price" style="color:var(--text-muted);font-size:0.85rem;font-weight:500;">Наш: ${item.our_price.toLocaleString()} ₽</span>
-                    <span class="price">${item.competitor_price ? item.competitor_price.toLocaleString() + ' ₽' : 'Сбор...'}</span>
+                    <span style="font-size:0.75rem;color:var(--text-tertiary);font-weight:600;">Наша цена:</span>
+                    <span class="price" style="color:${ourPriceColor};font-size:0.95rem;">${item.our_price.toLocaleString()} \u20BD</span>
+                    <span style="font-size:0.75rem;color:var(--text-tertiary);font-weight:600;margin-top:4px;">Цена конкурента:</span>
+                    <span class="price" style="font-size:0.95rem;">${item.competitor_price ? item.competitor_price.toLocaleString() + ' \u20BD' : 'Сбор...'}</span>
                 </div>
                 <div class="competitor-diff">
                     <div class="status-pill ${item.competitor_price ? diffClass : ''}" style="${!item.competitor_price ? 'opacity:0.5;' : ''}">
-                        ${item.competitor_price ? (diff > 0 ? '+' : '') + diff.toLocaleString() + ' ₽' : 'Ожидание'}
+                        ${item.competitor_price ? (diff > 0 ? '+' : '') + diff.toLocaleString() + ' \u20BD' : 'Ожидание'}
                     </div>
                 </div>
             `;

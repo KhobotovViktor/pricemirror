@@ -497,6 +497,7 @@ async function loadCompetitorProducts() {
                     <span class="price" style="font-size:0.95rem;">${item.competitor_price ? item.competitor_price.toLocaleString() + ' \u20BD' : 'Сбор...'}</span>
                 </div>
                 <div class="competitor-diff">
+                    <span style="font-size:0.75rem;color:var(--text-tertiary);font-weight:600;">Отклонение:</span>
                     <div class="status-pill ${item.competitor_price ? diffClass : ''}" style="${!item.competitor_price ? 'opacity:0.5;' : ''}">
                         ${item.competitor_price ? (diff > 0 ? '+' : '') + diff.toLocaleString() + ' \u20BD' : 'Ожидание'}
                     </div>

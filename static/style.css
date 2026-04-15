@@ -516,7 +516,7 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
 }
 .competitor-info { flex: 1; min-width: 0; }
 .competitor-prices { text-align: right; flex-shrink: 0; display: flex; flex-direction: column; gap: 2px; }
-.competitor-diff { flex-shrink: 0; }
+.competitor-diff { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 
 input[type="checkbox"] {
     width: 18px;
@@ -542,6 +542,36 @@ input[type="checkbox"] {
     line-height: 1;
     white-space: nowrap;
 }
+
+/* Status pill (competitor diff) */
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 12px;
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+    min-width: 80px;
+    background: var(--bg-surface-hover);
+    color: var(--text-secondary);
+}
+.status-pill.status-danger {
+    background: var(--danger-bg);
+    color: #b91c1c;
+}
+.status-pill.status-success {
+    background: var(--success-bg);
+    color: #15803d;
+}
+.status-pill.status-warning {
+    background: var(--warning-bg);
+    color: #a16207;
+}
+[data-theme="dark"] .status-pill.status-danger { color: var(--danger); }
+[data-theme="dark"] .status-pill.status-success { color: var(--success); }
+[data-theme="dark"] .status-pill.status-warning { color: var(--warning); }
 .badge-dot {
     width: 6px;
     height: 6px;
@@ -1092,10 +1122,9 @@ input[type="checkbox"] {
     }
     .sidebar.open { left: 0; }
     .sidebar.open .nav-text,
-    .sidebar.open .nav-badge,
     .sidebar.open .sidebar-logo span { display: inline; }
 
-    /* Mobile sidebar nav links: single line */
+    /* Mobile sidebar nav links: single line, compact badges */
     .sidebar.open .nav-link {
         justify-content: flex-start;
         flex-wrap: nowrap;
@@ -1103,6 +1132,12 @@ input[type="checkbox"] {
     .sidebar.open .nav-link .nav-text {
         flex: 1;
         min-width: 0;
+    }
+    .sidebar.open .nav-badge {
+        display: inline;
+        font-size: 0.55rem;
+        padding: 1px 4px;
+        min-width: 14px;
     }
 
     .main-content { padding: 60px 16px 24px; height: auto; min-height: 100vh; }

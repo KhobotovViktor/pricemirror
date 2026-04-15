@@ -513,6 +513,7 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
     border-bottom: 1px solid var(--border);
     transition: background var(--transition-fast);
     width: 100%;
+    max-width: 100%;
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -524,20 +525,22 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
     flex-direction: column;
     gap: 10px;
     width: 100%;
+    max-width: 100%;
     overflow: hidden;
 }
 
 .comp-header {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 10px;
     width: 100%;
-    min-width: 0;
+    max-width: 100%;
     overflow: hidden;
 }
 .comp-header-text {
-    flex: 1;
+    flex: 1 1 0%;
     min-width: 0;
+    max-width: 100%;
     overflow: hidden;
 }
 .comp-name {
@@ -547,7 +550,7 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 100%;
+    display: block;
 }
 .comp-meta {
     display: flex;
@@ -1359,15 +1362,26 @@ input[type="checkbox"] {
 
     /* Competitor items mobile layout */
     .competitor-product-item {
-        padding: 12px;
+        padding: 10px 12px;
+        overflow: hidden;
     }
     .comp-card {
         gap: 8px;
+        overflow: hidden;
     }
     .comp-header {
         gap: 8px;
+        overflow: hidden;
     }
-    .comp-name { font-size: 0.85rem; }
+    .comp-header-text {
+        overflow: hidden;
+    }
+    .comp-name {
+        font-size: 0.85rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     .comp-meta { font-size: 0.7rem; }
     .comp-footer {
         flex-wrap: nowrap;
@@ -1380,7 +1394,7 @@ input[type="checkbox"] {
     .comp-price-label { font-size: 0.6rem; }
     .comp-price-value { font-size: 0.82rem; }
     .comp-delete-btn {
-        align-self: flex-start;
+        align-self: center;
         width: 30px;
         min-width: 30px;
         height: 30px;

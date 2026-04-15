@@ -516,6 +516,7 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
     transition: background var(--transition-fast);
     width: 100%;
     box-sizing: border-box;
+    overflow: hidden;
 }
 .competitor-product-item:last-child { border-bottom: none; }
 .competitor-product-item:hover { background: var(--bg-surface-hover); }
@@ -525,11 +526,21 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
     flex-direction: column;
     gap: 10px;
     width: 100%;
+    overflow: hidden;
 }
 
 .comp-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
     width: 100%;
     min-width: 0;
+    overflow: hidden;
+}
+.comp-header-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
 }
 .comp-name {
     font-weight: 700;
@@ -538,6 +549,7 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 100%;
 }
 .comp-meta {
     display: flex;
@@ -608,6 +620,7 @@ button { all: unset; box-sizing: border-box; cursor: pointer; font-family: inher
     align-items: center;
     justify-content: center;
     width: 32px;
+    min-width: 32px;
     height: 32px;
     border-radius: var(--radius-md);
     border: 1px solid var(--border);
@@ -1347,20 +1360,31 @@ input[type="checkbox"] {
     .batch-bar { flex-wrap: wrap; gap: 8px; }
 
     /* Competitor items mobile layout */
-    .comp-footer {
-        flex-wrap: nowrap;
+    .competitor-product-item {
+        padding: 12px;
+    }
+    .comp-card {
+        gap: 8px;
+    }
+    .comp-header {
+        gap: 8px;
     }
     .comp-name { font-size: 0.85rem; }
     .comp-meta { font-size: 0.7rem; }
+    .comp-footer {
+        flex-wrap: nowrap;
+        gap: 8px;
+    }
     .comp-prices-grid {
-        gap: 12px;
+        gap: 10px;
         flex-wrap: wrap;
     }
     .comp-price-label { font-size: 0.6rem; }
-    .comp-price-value { font-size: 0.85rem; }
+    .comp-price-value { font-size: 0.82rem; }
     .comp-delete-btn {
-        align-self: center;
+        align-self: flex-start;
         width: 30px;
+        min-width: 30px;
         height: 30px;
         font-size: 0.7rem;
     }

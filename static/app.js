@@ -486,11 +486,16 @@ async function loadCompetitorProducts() {
             div.innerHTML = `
                 <div class="comp-card">
                     <div class="comp-header">
-                        <div class="comp-name">${item.our_product_name}</div>
-                        <div class="comp-meta">
-                            <span class="comp-store">${item.store_name}</span>
-                            <a href="${item.url}" target="_blank" class="comp-link">Открыть ссылку <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                        <div class="comp-header-text">
+                            <div class="comp-name">${item.our_product_name}</div>
+                            <div class="comp-meta">
+                                <span class="comp-store">${item.store_name}</span>
+                                <a href="${item.url}" target="_blank" class="comp-link">Открыть ссылку <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
+                            </div>
                         </div>
+                        <button class="comp-delete-btn" onclick="deleteMapping(${item.id}, this)" title="Удалить сопоставление">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
                     </div>
                     <div class="comp-footer">
                         <div class="comp-prices-grid">
@@ -509,9 +514,6 @@ async function loadCompetitorProducts() {
                                 </div>
                             </div>
                         </div>
-                        <button class="comp-delete-btn" onclick="deleteMapping(${item.id}, this)" title="Удалить сопоставление">
-                            <i class="fa-solid fa-trash-can"></i>
-                        </button>
                     </div>
                 </div>
             `;

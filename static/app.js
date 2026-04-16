@@ -2360,7 +2360,7 @@ const STORE_LOCATIONS = [
 ];
 
 function locationSelect(selectedValue, idAttr) {
-    return `<select class="form-select" ${idAttr} style="font-size:0.8rem;padding:3px 6px;height:28px;">
+    return `<select class="form-select" ${idAttr}>
         ${STORE_LOCATIONS.map(l => `<option value="${l}"${l === selectedValue ? ' selected' : ''}>${l}</option>`).join('')}
     </select>`;
 }
@@ -2395,6 +2395,7 @@ async function loadCompetitors() {
         }
         html += '</tbody></table>';
         container.innerHTML = html;
+        initCustomDropdowns();
     } catch (err) { console.error('Competitors load error:', err); }
 }
 

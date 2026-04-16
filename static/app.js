@@ -647,7 +647,7 @@ function _populateAnalyticsFilters() {
         const stores = _analyticsData.stores || [];
         if (storeDiv.children.length === 0) {
             storeDiv.innerHTML =
-                `<label style="font-size:0.78rem;display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="our" checked onchange="renderAvgPriceReport()"> Аллея Дома</label>` +
+                `<label style="font-size:0.78rem;display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="our" checked onchange="renderAvgPriceReport()"> Аллея Мебели</label>` +
                 stores.map(s =>
                     `<label data-location="${s.location || ''}" style="font-size:0.78rem;display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="${s.id}" checked onchange="renderAvgPriceReport()"> ${s.name}</label>`
                 ).join('');
@@ -714,14 +714,14 @@ async function renderAvgPriceReport() {
 
     // Build: { storeName: [prices] }
     const storePrices = {};
-    if (includeOur) storePrices['Аллея Дома'] = [];
+    if (includeOur) storePrices['Аллея Мебели'] = [];
 
     for (const s of data.stores) {
         if (storeIds.includes(s.id)) storePrices[s.name] = [];
     }
 
     for (const p of products) {
-        if (includeOur && p.current_price) storePrices['Аллея Дома'].push(p.current_price);
+        if (includeOur && p.current_price) storePrices['Аллея Мебели'].push(p.current_price);
         for (const m of p.mappings) {
             if (storeIds.includes(m.store_id) && m.last_price) {
                 const name = m.store_name;
@@ -736,15 +736,37 @@ async function renderAvgPriceReport() {
     for (const s of data.stores) storeColorMap[s.name] = s.color || '#64748b';
     const ourColor = data.our_store_color || '#6366f1';
 
-    const labels = [];
-    const values = [];
-    const colors = [];
+    // Build rows array for sorting
+    let rows = [];
     for (const [name, prices] of Object.entries(storePrices)) {
         if (prices.length === 0) continue;
-        labels.push(name);
-        values.push(Math.round(prices.reduce((a, b) => a + b, 0) / prices.length));
-        colors.push(name === 'Аллея Дома' ? ourColor : (storeColorMap[name] || '#64748b'));
+        rows.push({
+            name,
+            value: Math.round(prices.reduce((a, b) => a + b, 0) / prices.length),
+            color: name === 'Аллея Мебели' ? ourColor : (storeColorMap[name] || '#64748b'),
+        });
     }
+
+    // Apply sort
+    const sortBy = document.getElementById('avgPriceSortBy')?.value || 'price-desc';
+    rows.sort((a, b) => {
+        if (sortBy === 'price-desc') return b.value - a.value;
+        if (sortBy === 'price-asc')  return a.value - b.value;
+        if (sortBy === 'name-asc')   return a.name.localeCompare(b.name, 'ru');
+        if (sortBy === 'name-desc')  return b.name.localeCompare(a.name, 'ru');
+        return 0;
+    });
+
+    // Pin "Аллея Мебели" to top if checkbox checked
+    const pinOur = document.getElementById('avgPricePinOur')?.checked;
+    if (pinOur) {
+        const ourIdx = rows.findIndex(r => r.name === 'Аллея Мебели');
+        if (ourIdx > 0) rows.unshift(rows.splice(ourIdx, 1)[0]);
+    }
+
+    const labels = rows.map(r => r.name);
+    const values = rows.map(r => r.value);
+    const colors = rows.map(r => r.color);
 
     const canvas = document.getElementById('avgPriceChart');
     if (!canvas) return;
@@ -978,7 +1000,7 @@ async function renderTrendReport() {
             const ourAvg = Math.round(ourProducts.reduce((s, p) => s + p.current_price, 0) / ourProducts.length);
             const ourColor = baseData.our_store_color || '#6366f1';
             datasets.push({
-                label: 'Аллея Дома (средняя)',
+                label: 'Аллея Мебели (средняя)',
                 data: sortedDates.map(d => ({ x: d, y: ourAvg })),
                 borderColor: ourColor,
                 backgroundColor: ourColor + '08',
@@ -1720,7 +1742,7 @@ function renderChart(data) {
             return lastKnown;
         });
         datasets.push({
-            label: 'Наша цена (Аллея Дома)',
+            label: 'Наша цена (Аллея Мебели)',
             data: ourData,
             borderColor: ourColor,
             backgroundColor: ourColor + '10',
@@ -2639,7 +2661,7 @@ async function downloadReportPdf(reportId) {
 </head><body>
 <button class="no-print print-btn" onclick="window.print()"><i class="fa-solid fa-print"></i> Печать / Сохранить PDF</button>
 <h1>Price Mirror — ${title}</h1>
-<div class="subtitle">Сформирован: ${now} &bull; Аллея Дома (alleyadoma.ru)</div>
+<div class="subtitle">Сформирован: ${now} &bull; Аллея Мебели (alleyadoma.ru)</div>
 ${contentHtml}
 </body></html>`;
 
@@ -2713,7 +2735,7 @@ async function generatePdfReport() {
 </head><body>
 <button class="no-print print-btn" onclick="window.print()"><i class="fa-solid fa-print"></i> Печать / Сохранить PDF</button>
 <h1>Price Mirror — Отчёт по ценам</h1>
-<div class="subtitle">Сформирован: ${now} &bull; Аллея Дома (alleyadoma.ru)</div>
+<div class="subtitle">Сформирован: ${now} &bull; Аллея Мебели (alleyadoma.ru)</div>
 <div class="stats">
     <div class="stat-card"><div class="label">Всего товаров</div><div class="value">${total}</div></div>
     <div class="stat-card" style="border-left:3px solid #ef4444;"><div class="label">В зоне риска</div><div class="value" style="color:#ef4444;">${atRisk}</div></div>

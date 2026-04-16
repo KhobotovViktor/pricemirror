@@ -379,10 +379,25 @@
                                         <option value="">Все расположения</option>
                                     </select>
                                 </div>
+                                <div class="flex-1" style="min-width:min(200px,100%);position:relative;z-index:10">
+                                    <label class="form-label text-muted">Сортировка</label>
+                                    <select class="form-select" id="avgPriceSortBy" onchange="renderAvgPriceReport()">
+                                        <option value="price-desc">По цене: убывание</option>
+                                        <option value="price-asc">По цене: возрастание</option>
+                                        <option value="name-asc">По названию: А → Я</option>
+                                        <option value="name-desc">По названию: Я → А</option>
+                                    </select>
+                                </div>
                                 <div style="flex:2;min-width:min(300px,100%)">
                                     <label class="form-label text-muted">Магазины для сравнения</label>
                                     <div id="avgPriceStoreFilter" class="flex flex-wrap gap-xs" style="padding:8px;border:1px solid var(--border);border-radius:var(--radius-md);max-height:100px;overflow-y:auto;background:var(--bg-surface)"></div>
                                 </div>
+                            </div>
+                            <div class="flex items-center gap-sm mb-md">
+                                <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:0.875rem;font-weight:600;color:var(--text-secondary);">
+                                    <input type="checkbox" id="avgPricePinOur" onchange="renderAvgPriceReport()" style="width:16px;height:16px;cursor:pointer;">
+                                    Всегда показывать «Аллея Мебели» первой
+                                </label>
                             </div>
                             <div class="chart-container">
                                 <canvas id="avgPriceChart"></canvas>
@@ -609,7 +624,7 @@
                         <div class="store-color-row">
                             <input type="color" class="color-picker" id="ourStoreColorPicker" value="#6366f1">
                             <div class="store-color-info">
-                                <div class="store-color-name">Аллея Дома</div>
+                                <div class="store-color-name">Аллея Мебели</div>
                                 <div class="store-color-domain">Наш магазин</div>
                             </div>
                             <button onclick="saveOurStoreColor()" class="btn btn-secondary btn-sm">Сохранить</button>

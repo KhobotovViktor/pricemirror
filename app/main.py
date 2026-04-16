@@ -1203,8 +1203,8 @@ async def get_all_competitor_products(user_id: str = Depends(get_current_user)):
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
     try:
         # Fetch mappings with store and our product info
-        mappings = supabase.table("competitor_product").select("*, competitor_store(name), our_product(name, current_price, category_id), price_record(*)").execute().data
-        
+        mappings = supabase.table("competitor_product").select("*, competitor_store(name, location), our_product(name, current_price, category_id), price_record(*)").execute().data
+
         result = []
         for m in mappings:
             records = m.get('price_record', [])
@@ -1212,11 +1212,13 @@ async def get_all_competitor_products(user_id: str = Depends(get_current_user)):
             if records:
                 latest = sorted(records, key=lambda x: x['created_at'])[-1]
                 latest_price = float(latest['price'])
-            
+
+            store = m.get('competitor_store') or {}
             result.append({
                 "id": m['id'],
                 "url": m['url'],
-                "store_name": m['competitor_store']['name'] if m.get('competitor_store') else "—",
+                "store_name": store.get('name', '—'),
+                "store_location": store.get('location', 'Торговая сеть'),
                 "our_product_name": m['our_product']['name'] if m.get('our_product') else "—",
                 "our_price": float(m['our_product']['current_price']) if m.get('our_product') and m['our_product'].get('current_price') else 0,
                 "competitor_price": latest_price,

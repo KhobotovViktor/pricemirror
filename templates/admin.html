@@ -267,6 +267,9 @@
                                     <i class="fa-solid fa-search"></i>
                                     <input class="form-input" type="text" id="competitorSearch" placeholder="Поиск по названию..." oninput="filterCompetitors()">
                                 </div>
+                                <select class="form-select" id="competitorLocationFilter">
+                                    <option value="all">Все расположения</option>
+                                </select>
                                 <select class="form-select" id="competitorStoreFilter">
                                     <option value="all">Все магазины</option>
                                 </select>
@@ -370,6 +373,12 @@
                                         <option value="">Все товарные группы</option>
                                     </select>
                                 </div>
+                                <div class="flex-1" style="min-width:min(200px,100%);position:relative;z-index:10">
+                                    <label class="form-label text-muted">Расположение</label>
+                                    <select class="form-select" id="avgPriceLocationFilter" onchange="renderAvgPriceReport()">
+                                        <option value="">Все расположения</option>
+                                    </select>
+                                </div>
                                 <div style="flex:2;min-width:min(300px,100%)">
                                     <label class="form-label text-muted">Магазины для сравнения</label>
                                     <div id="avgPriceStoreFilter" class="flex flex-wrap gap-xs" style="padding:8px;border:1px solid var(--border);border-radius:var(--radius-md);max-height:100px;overflow-y:auto;background:var(--bg-surface)"></div>
@@ -393,11 +402,19 @@
                                     <i class="fa-solid fa-file-pdf"></i> Скачать PDF
                                 </button>
                             </div>
-                            <div class="mb-md">
-                                <label class="form-label text-muted">Товарная группа</label>
-                                <select class="form-select" id="heatmapCategoryFilter" onchange="renderHeatmap()">
-                                    <option value="">Все товарные группы</option>
-                                </select>
+                            <div class="flex gap-md mb-md flex-wrap">
+                                <div class="flex-1" style="min-width:min(200px,100%)">
+                                    <label class="form-label text-muted">Товарная группа</label>
+                                    <select class="form-select" id="heatmapCategoryFilter" onchange="renderHeatmap()">
+                                        <option value="">Все товарные группы</option>
+                                    </select>
+                                </div>
+                                <div class="flex-1" style="min-width:min(200px,100%)">
+                                    <label class="form-label text-muted">Расположение</label>
+                                    <select class="form-select" id="heatmapLocationFilter" onchange="renderHeatmap()">
+                                        <option value="">Все расположения</option>
+                                    </select>
+                                </div>
                             </div>
                             <div id="heatmapContainer" style="overflow-x:auto"></div>
                             <div class="heatmap-legend">
@@ -421,11 +438,19 @@
                                     <i class="fa-solid fa-file-pdf"></i> Скачать PDF
                                 </button>
                             </div>
-                            <div class="mb-md">
-                                <label class="form-label text-muted">Товарная группа</label>
-                                <select class="form-select" id="trendCategoryFilter" onchange="renderTrendReport()">
-                                    <option value="">Все товарные группы</option>
-                                </select>
+                            <div class="flex gap-md mb-md flex-wrap">
+                                <div class="flex-1" style="min-width:min(200px,100%)">
+                                    <label class="form-label text-muted">Товарная группа</label>
+                                    <select class="form-select" id="trendCategoryFilter" onchange="renderTrendReport()">
+                                        <option value="">Все товарные группы</option>
+                                    </select>
+                                </div>
+                                <div class="flex-1" style="min-width:min(200px,100%)">
+                                    <label class="form-label text-muted">Расположение</label>
+                                    <select class="form-select" id="trendLocationFilter" onchange="renderTrendReport()">
+                                        <option value="">Все расположения</option>
+                                    </select>
+                                </div>
                             </div>
                             <div class="chart-container chart-container--tall">
                                 <canvas id="trendChart"></canvas>

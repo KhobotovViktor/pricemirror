@@ -440,20 +440,35 @@ async function loadStores() {
         const response = await fetch('/api/stores');
         if (!response.ok) return;
         const stores = await response.json();
+
+        // Populate store filter
         const select = document.getElementById('competitorStoreFilter');
-        if (!select) return;
+        if (select) {
+            select.innerHTML = '<option value="all">Все магазины</option>';
+            stores.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id;
+                opt.textContent = s.name;
+                select.appendChild(opt);
+            });
+            select.onchange = () => filterCompetitors();
+            refreshCustomDropdown(select);
+        }
 
-        select.innerHTML = '<option value="all">Все магазины</option>';
-        stores.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s.id;
-            opt.textContent = s.name;
-            select.appendChild(opt);
-        });
-
-        select.onchange = () => filterCompetitors();
-        // Refresh custom dropdown
-        refreshCustomDropdown(select);
+        // Populate location filter with unique locations
+        const locSelect = document.getElementById('competitorLocationFilter');
+        if (locSelect) {
+            const locations = [...new Set(stores.map(s => s.location).filter(Boolean))].sort();
+            locSelect.innerHTML = '<option value="all">Все расположения</option>';
+            locations.forEach(loc => {
+                const opt = document.createElement('option');
+                opt.value = loc;
+                opt.textContent = loc;
+                locSelect.appendChild(opt);
+            });
+            locSelect.onchange = () => filterCompetitors();
+            refreshCustomDropdown(locSelect);
+        }
     } catch (err) {
         console.error('Stores Load Error:', err);
     }
@@ -461,6 +476,7 @@ async function loadStores() {
 
 function filterCompetitors() {
     const storeId = document.getElementById('competitorStoreFilter').value;
+    const location = document.getElementById('competitorLocationFilter')?.value || 'all';
     const priceFilter = document.getElementById('competitorPriceFilter')?.value || 'all';
     const categoryId = document.getElementById('competitorCategoryFilter')?.value || 'all';
     const query = document.getElementById('competitorSearch')?.value.toLowerCase() || '';
@@ -468,10 +484,11 @@ function filterCompetitors() {
 
     items.forEach(item => {
         const storeMatch = storeId === 'all' || item.dataset.store === storeId;
+        const locationMatch = location === 'all' || item.dataset.location === location;
         const priceMatch = priceFilter === 'all' || item.dataset.priceStatus === priceFilter;
         const categoryMatch = categoryId === 'all' || item.dataset.category === categoryId;
         const nameMatch = !query || (item.dataset.name || '').includes(query);
-        item.style.display = (storeMatch && priceMatch && categoryMatch && nameMatch) ? 'flex' : 'none';
+        item.style.display = (storeMatch && locationMatch && priceMatch && categoryMatch && nameMatch) ? 'flex' : 'none';
     });
 }
 
@@ -499,6 +516,7 @@ async function loadCompetitorProducts() {
             div.dataset.id = item.id;
             div.dataset.category = item.category_id ?? '';
             div.dataset.name = (item.our_product_name || '').toLowerCase();
+            div.dataset.location = item.store_location || '';
 
             const diff = item.competitor_price ? (item.our_price - item.competitor_price) : 0;
             const diffClass = diff > 0 ? 'status-danger' : (diff < 0 ? 'status-success' : '');
@@ -631,10 +649,23 @@ function _populateAnalyticsFilters() {
             storeDiv.innerHTML =
                 `<label style="font-size:0.78rem;display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="our" checked onchange="renderAvgPriceReport()"> Аллея Дома</label>` +
                 stores.map(s =>
-                    `<label style="font-size:0.78rem;display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="${s.id}" checked onchange="renderAvgPriceReport()"> ${s.name}</label>`
+                    `<label data-location="${s.location || ''}" style="font-size:0.78rem;display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap;"><input type="checkbox" value="${s.id}" checked onchange="renderAvgPriceReport()"> ${s.name}</label>`
                 ).join('');
         }
     }
+
+    // Populate location filters for all 3 analytics reports
+    const stores = _analyticsData.stores || [];
+    const locations = [...new Set(stores.map(s => s.location).filter(Boolean))].sort();
+    ['avgPriceLocationFilter', 'heatmapLocationFilter', 'trendLocationFilter'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">Все расположения</option>' +
+            locations.map(l => `<option value="${l}">${l}</option>`).join('');
+        if (currentVal) sel.value = currentVal;
+        refreshCustomDropdown(sel);
+    });
 }
 
 async function loadStatisticsSection() {
@@ -653,9 +684,26 @@ async function renderAvgPriceReport() {
     if (!data) return;
 
     const catFilter = document.getElementById('avgPriceCategoryFilter')?.value;
+    const locationFilter = document.getElementById('avgPriceLocationFilter')?.value || '';
     const storeDiv = document.getElementById('avgPriceStoreFilter');
+
+    // Show/hide store checkboxes based on location filter
+    if (storeDiv && locationFilter) {
+        storeDiv.querySelectorAll('label[data-location]').forEach(lbl => {
+            lbl.style.display = lbl.dataset.location === locationFilter ? '' : 'none';
+        });
+    } else if (storeDiv) {
+        storeDiv.querySelectorAll('label[data-location]').forEach(lbl => { lbl.style.display = ''; });
+    }
+
     const selectedStores = storeDiv ?
-        Array.from(storeDiv.querySelectorAll('input:checked')).map(cb => cb.value) : [];
+        Array.from(storeDiv.querySelectorAll('input:checked'))
+            .filter(cb => {
+                if (cb.value === 'our') return true;
+                if (!locationFilter) return true;
+                return cb.closest('label')?.dataset.location === locationFilter;
+            })
+            .map(cb => cb.value) : [];
 
     const includeOur = selectedStores.includes('our');
     const storeIds = selectedStores.filter(s => s !== 'our').map(Number);
@@ -801,12 +849,20 @@ async function renderHeatmap() {
     if (!data) return;
 
     const catFilter = document.getElementById('heatmapCategoryFilter')?.value;
+    const locationFilter = document.getElementById('heatmapLocationFilter')?.value || '';
     let products = data.products.filter(p => p.current_price && p.has_price);
     if (catFilter) products = products.filter(p => String(p.category_id) === catFilter);
 
-    // Collect all store IDs that have mappings
+    // Build allowed store IDs (filtered by location)
+    const allowedStoreIds = new Set(
+        data.stores
+            .filter(s => !locationFilter || s.location === locationFilter)
+            .map(s => s.id)
+    );
+
+    // Collect store IDs that have mappings AND pass location filter
     const storeSet = new Set();
-    for (const p of products) for (const m of p.mappings) if (m.last_price) storeSet.add(m.store_id);
+    for (const p of products) for (const m of p.mappings) if (m.last_price && allowedStoreIds.has(m.store_id)) storeSet.add(m.store_id);
     const storeIds = [...storeSet];
     const storeNames = {};
     for (const s of data.stores) storeNames[s.id] = s.name;
@@ -851,12 +907,20 @@ async function renderTrendReport() {
     if (!data) return;
 
     const catFilter = document.getElementById('trendCategoryFilter')?.value;
+    const locationFilter = document.getElementById('trendLocationFilter')?.value || '';
 
     // Get product IDs in this category
     let productIds = null;
     if (catFilter) {
         productIds = new Set(data.products.filter(p => String(p.category_id) === catFilter).map(p => p.id));
     }
+
+    // Build allowed store IDs (filtered by location)
+    const allowedTrendStores = new Set(
+        data.stores
+            .filter(s => !locationFilter || s.location === locationFilter)
+            .map(s => String(s.id))
+    );
 
     // Build datasets from trend data, filtered by category products
     // trend: { storeId: { store_name, data: { date: avg_price } } }
@@ -903,6 +967,8 @@ async function renderTrendReport() {
     }
 
     for (const [sid, sdata] of Object.entries(data.trend)) {
+        if (!allowedTrendStores.has(sid)) continue;
+
         const dates = Object.keys(sdata.data);
         dates.forEach(d => allDates.add(d));
 

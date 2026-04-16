@@ -18,7 +18,8 @@ try:
 except Exception:
     _stealth_fn = None
     _STEALTH_AVAILABLE = False
-from datetime import datetime
+from datetime import datetime, timezone, timedelta as _timedelta
+MSK = timezone(_timedelta(hours=3))
 from dotenv import load_dotenv
 from pathlib import Path
 import os
@@ -430,7 +431,7 @@ async def scrape_for_product(product_id: int):
                 supabase.table("our_price_history").insert({
                     "product_id": product_id,
                     "price": our_details['price'],
-                    "created_at": datetime.utcnow().isoformat()
+                    "created_at": datetime.now(MSK).isoformat()
                 }).execute()
             except Exception as hist_err:
                 print(f"[OurPriceHistory] Insert error: {hist_err}")
@@ -476,7 +477,7 @@ async def scrape_specific_mapping(mapping_id: int):
 
             supabase.table("competitor_product").update({
                 "last_price": details['price'],
-                "last_scrape": datetime.utcnow().isoformat()
+                "last_scrape": datetime.now(MSK).isoformat()
             }).eq("id", mapping_id).execute()
 
             # 4. Alert on significant price changes
@@ -527,7 +528,7 @@ async def scrape_our_product_price(product_id: int):
                 supabase.table("our_price_history").insert({
                     "product_id": product_id,
                     "price": details['price'],
-                    "created_at": datetime.utcnow().isoformat()
+                    "created_at": datetime.now(MSK).isoformat()
                 }).execute()
             except Exception as hist_err:
                 print(f"[OurPriceHistory] Insert error: {hist_err}")
@@ -559,14 +560,14 @@ async def _scrape_mapping_safe(cm: dict, our_prod: dict):
         supabase.table("price_record").insert({
             "competitor_product_id": cm['id'],
             "price": details['price'],
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(MSK).isoformat()
         }).execute()
 
         old_last_price = float(cm['last_price']) if cm.get('last_price') else None
 
         supabase.table("competitor_product").update({
             "last_price": details['price'],
-            "last_scrape": datetime.utcnow().isoformat()
+            "last_scrape": datetime.now(MSK).isoformat()
         }).eq("id", cm['id']).execute()
 
         if our_prod.get('current_price') and details['price'] < float(our_prod['current_price']):

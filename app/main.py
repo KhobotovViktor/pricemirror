@@ -18,7 +18,8 @@ import json
 import urllib.parse
 import jwt
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta as _timedelta
+MSK = timezone(_timedelta(hours=3))
 from starlette.responses import RedirectResponse
 from fastapi.security import APIKeyCookie
 import traceback
@@ -251,7 +252,7 @@ async def get_pdf_report(request: Request, user_id: str = Depends(get_current_us
             "report_pdf.html", 
             {
                 "request": request,
-                "now": datetime.now().strftime("%d.%m.%Y %H:%M"),
+                "now": datetime.now(MSK).strftime("%d.%m.%Y %H:%M"),
                 "products": products
             }
         )
@@ -663,7 +664,7 @@ async def get_analytics_full(user_id: str = Depends(get_current_user)):
         mappings = supabase.table("competitor_product").select("*, competitor_store(id, name)").execute().data
 
         # 4. Price history last 30 days (with store_id via competitor_product)
-        cutoff = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        cutoff = (datetime.now(MSK) - timedelta(days=30)).isoformat()
         records = supabase.table("price_record").select(
             "price, created_at, competitor_product(store_id, our_product_id)"
         ).gte("created_at", cutoff).order("created_at").execute().data
@@ -681,7 +682,7 @@ async def get_analytics_full(user_id: str = Depends(get_current_user)):
             })
 
         # Build products output
-        now = datetime.utcnow()
+        now = datetime.now(MSK)
         products_out = []
         for p in products_raw:
             pmappings = mapping_by_product.get(p["id"], [])
@@ -694,7 +695,9 @@ async def get_analytics_full(user_id: str = Depends(get_current_user)):
             is_stale = False
             if latest_scrape:
                 try:
-                    ls = datetime.fromisoformat(latest_scrape.replace("Z", "+00:00").replace("+00:00", ""))
+                    ls = datetime.fromisoformat(latest_scrape.replace("Z", "+00:00"))
+                    if ls.tzinfo is None:
+                        ls = ls.replace(tzinfo=timezone.utc)
                     is_stale = (now - ls).days > 7
                 except Exception:
                     pass
@@ -761,7 +764,7 @@ async def get_analytics_trend(
         from datetime import datetime, timedelta, date
 
         # Resolve date range
-        now = datetime.utcnow()
+        now = datetime.now(MSK)
         if date_from and date_to:
             try:
                 cutoff = datetime.fromisoformat(date_from).isoformat()
@@ -1254,7 +1257,7 @@ async def update_product(
                 supabase.table("our_price_history").insert({
                     "product_id": product_id,
                     "price": float(data["current_price"]),
-                    "created_at": datetime.utcnow().isoformat()
+                    "created_at": datetime.now(MSK).isoformat()
                 }).execute()
             except Exception as hist_err:
                 print(f"[OurPriceHistory] Insert error (table may not exist): {hist_err}")

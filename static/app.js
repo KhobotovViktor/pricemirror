@@ -902,22 +902,54 @@ async function renderHeatmap() {
 
 // ---- REPORT 3: Price Trend by Category ----
 
+function onTrendPeriodChange() {
+    const preset = document.getElementById('trendPeriodPreset')?.value;
+    const customEl = document.getElementById('trendCustomRange');
+    if (customEl) customEl.style.setProperty('display', preset === 'custom' ? 'flex' : 'none', 'important');
+    if (preset !== 'custom') renderTrendReport();
+}
+
 async function renderTrendReport() {
-    const data = await loadAnalyticsData();
-    if (!data) return;
+    const baseData = await loadAnalyticsData();
+    if (!baseData) return;
 
     const catFilter = document.getElementById('trendCategoryFilter')?.value;
     const locationFilter = document.getElementById('trendLocationFilter')?.value || '';
+    const preset = document.getElementById('trendPeriodPreset')?.value || '30';
+
+    // Build query params for trend endpoint
+    let trendUrl = '/api/analytics/trend';
+    if (preset === 'custom') {
+        const df = document.getElementById('trendDateFrom')?.value;
+        const dt = document.getElementById('trendDateTo')?.value;
+        if (!df || !dt) return; // wait for both dates
+        trendUrl += `?date_from=${df}&date_to=${dt}`;
+    } else {
+        trendUrl += `?days=${preset}`;
+    }
+
+    let trendData;
+    try {
+        const resp = await fetch(trendUrl, { credentials: 'include' });
+        if (!resp.ok) return;
+        trendData = await resp.json();
+    } catch (e) { console.error('Trend fetch error:', e); return; }
+
+    const trend = trendData.trend || {};
+    // Use stores from trend response (has colors); merge location field from baseData stores
+    const baseStoreMap = {};
+    for (const s of (baseData.stores || [])) baseStoreMap[String(s.id)] = s;
+    const trendStores = (trendData.stores || []).map(s => ({ ...s, ...(baseStoreMap[String(s.id)] || {}) }));
 
     // Get product IDs in this category
     let productIds = null;
     if (catFilter) {
-        productIds = new Set(data.products.filter(p => String(p.category_id) === catFilter).map(p => p.id));
+        productIds = new Set(baseData.products.filter(p => String(p.category_id) === catFilter).map(p => p.id));
     }
 
     // Build allowed store IDs (filtered by location)
     const allowedTrendStores = new Set(
-        data.stores
+        trendStores
             .filter(s => !locationFilter || s.location === locationFilter)
             .map(s => String(s.id))
     );
@@ -930,22 +962,21 @@ async function renderTrendReport() {
 
     // Build store color lookup
     const storeColorById = {};
-    for (const s of data.stores) storeColorById[String(s.id)] = s.color || '#64748b';
+    for (const s of trendStores) storeColorById[String(s.id)] = s.color || '#64748b';
 
-    // Add "our" store average as a reference line if we have price history
-    const ourProducts = data.products.filter(p => {
+    // Add "our" store average as a reference line
+    const ourProducts = baseData.products.filter(p => {
         if (productIds && !productIds.has(p.id)) return false;
         return p.current_price;
     });
     if (ourProducts.length > 0) {
-        // Collect all dates first to build a flat reference line
-        for (const [sid, sdata] of Object.entries(data.trend)) {
+        for (const [sid, sdata] of Object.entries(trend)) {
             Object.keys(sdata.data).forEach(d => allDates.add(d));
         }
         const sortedDates = [...allDates].sort();
         if (sortedDates.length > 0) {
             const ourAvg = Math.round(ourProducts.reduce((s, p) => s + p.current_price, 0) / ourProducts.length);
-            const ourColor = data.our_store_color || '#6366f1';
+            const ourColor = baseData.our_store_color || '#6366f1';
             datasets.push({
                 label: 'Аллея Дома (средняя)',
                 data: sortedDates.map(d => ({ x: d, y: ourAvg })),
@@ -961,12 +992,12 @@ async function renderTrendReport() {
                 pointHoverBackgroundColor: ourColor,
                 pointHoverBorderColor: '#fff',
                 pointHoverBorderWidth: 2,
-                order: 0, // draw on top
+                order: 0,
             });
         }
     }
 
-    for (const [sid, sdata] of Object.entries(data.trend)) {
+    for (const [sid, sdata] of Object.entries(trend)) {
         if (!allowedTrendStores.has(sid)) continue;
 
         const dates = Object.keys(sdata.data);
@@ -1929,6 +1960,7 @@ window.switchReportTab = switchReportTab;
 window.renderAvgPriceReport = renderAvgPriceReport;
 window.renderHeatmap = renderHeatmap;
 window.renderTrendReport = renderTrendReport;
+window.onTrendPeriodChange = onTrendPeriodChange;
 window.renderRiskReport = renderRiskReport;
 window.renderCoverageReport = renderCoverageReport;
 window.saveStoreColor = saveStoreColor;

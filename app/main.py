@@ -5,7 +5,7 @@ import asyncio
 if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from fastapi import FastAPI, Depends, HTTPException, Request, Form, BackgroundTasks, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, BackgroundTasks, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -742,6 +742,75 @@ async def get_analytics_full(user_id: str = Depends(get_current_user)):
         import traceback as _tb
         print(f"ANALYTICS FULL ERROR: {e}\n{_tb.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/analytics/trend")
+async def get_analytics_trend(
+    days: int = Query(None, ge=1, le=3650),
+    date_from: str = Query(None),
+    date_to: str = Query(None),
+    user_id: str = Depends(get_current_user),
+):
+    """Returns trend data for a configurable time period.
+    Pass either ?days=N or ?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD.
+    """
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        from collections import defaultdict
+        from datetime import datetime, timedelta, date
+
+        # Resolve date range
+        now = datetime.utcnow()
+        if date_from and date_to:
+            try:
+                cutoff = datetime.fromisoformat(date_from).isoformat()
+                end_dt = datetime.fromisoformat(date_to) + timedelta(days=1)
+                end_iso = end_dt.isoformat()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Неверный формат даты. Используйте YYYY-MM-DD.")
+        else:
+            period_days = days if days else 30
+            cutoff = (now - timedelta(days=period_days)).isoformat()
+            end_iso = None  # no upper bound
+
+        stores = supabase.table("competitor_store").select("*").order("name").execute().data
+        _sc_row = supabase.table("system_settings").select("value").eq("key", "store_colors").execute().data
+        store_colors = json.loads(_sc_row[0]["value"]) if _sc_row else {}
+        for s in stores:
+            s["color"] = store_colors.get(str(s["id"]), "#64748b")
+
+        q = supabase.table("price_record").select(
+            "price, created_at, competitor_product(store_id, our_product_id)"
+        ).gte("created_at", cutoff)
+        if end_iso:
+            q = q.lte("created_at", end_iso)
+        records = q.order("created_at").execute().data
+
+        store_names = {s["id"]: s["name"] for s in stores}
+        store_day = defaultdict(lambda: defaultdict(list))
+        for r in records:
+            cp = r.get("competitor_product")
+            if not cp:
+                continue
+            sid = cp.get("store_id")
+            day = r["created_at"][:10]
+            if sid and r.get("price"):
+                store_day[sid][day].append(float(r["price"]))
+
+        trend = {}
+        for sid, days_data in store_day.items():
+            trend[str(sid)] = {
+                "store_name": store_names.get(sid, str(sid)),
+                "data": {day: round(sum(v) / len(v), 2) for day, v in sorted(days_data.items())},
+            }
+
+        return {"trend": trend, "stores": stores}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/analytics/{product_id}")
 async def get_product_analytics(product_id: int):

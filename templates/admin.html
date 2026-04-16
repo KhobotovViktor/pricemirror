@@ -432,7 +432,7 @@
                             <div class="flex justify-between items-start mb-md flex-wrap gap-sm">
                                 <h2 class="section-title" style="margin-bottom:0">
                                     <i class="fa-solid fa-chart-line" style="color:var(--primary)"></i>
-                                    Динамика цен по товарной группе (30 дней)
+                                    Динамика цен по товарной группе
                                 </h2>
                                 <button onclick="downloadReportPdf('trend')" class="btn btn-secondary btn-sm">
                                     <i class="fa-solid fa-file-pdf"></i> Скачать PDF
@@ -450,6 +450,30 @@
                                     <select class="form-select" id="trendLocationFilter" onchange="renderTrendReport()">
                                         <option value="">Все расположения</option>
                                     </select>
+                                </div>
+                                <div class="flex-1" style="min-width:min(200px,100%)">
+                                    <label class="form-label text-muted">Период</label>
+                                    <select class="form-select" id="trendPeriodPreset" onchange="onTrendPeriodChange()">
+                                        <option value="7">7 дней</option>
+                                        <option value="14">14 дней</option>
+                                        <option value="30" selected>30 дней</option>
+                                        <option value="60">60 дней</option>
+                                        <option value="90">90 дней</option>
+                                        <option value="180">180 дней</option>
+                                        <option value="365">1 год</option>
+                                        <option value="custom">Произвольный</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Custom date range (hidden by default) -->
+                            <div id="trendCustomRange" class="flex gap-md mb-md flex-wrap" style="display:none!important">
+                                <div class="flex-1" style="min-width:min(160px,100%)">
+                                    <label class="form-label text-muted">Начало периода</label>
+                                    <input type="date" class="form-input" id="trendDateFrom" onchange="renderTrendReport()">
+                                </div>
+                                <div class="flex-1" style="min-width:min(160px,100%)">
+                                    <label class="form-label text-muted">Конец периода</label>
+                                    <input type="date" class="form-input" id="trendDateTo" onchange="renderTrendReport()">
                                 </div>
                             </div>
                             <div class="chart-container chart-container--tall">

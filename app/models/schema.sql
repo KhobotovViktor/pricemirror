@@ -40,7 +40,15 @@ CREATE TABLE price_record (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 6. Users (multi-user access with roles)
+-- 6. OurPriceHistory (tracks our own product price changes over time)
+CREATE TABLE our_price_history (
+    id SERIAL PRIMARY KEY,
+    product_id INTEGER NOT NULL REFERENCES our_product(id) ON DELETE CASCADE,
+    price DECIMAL(12, 2) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 7. Users (multi-user access with roles)
 CREATE TABLE app_user (
     id SERIAL PRIMARY KEY,
     username VARCHAR(255) UNIQUE NOT NULL,

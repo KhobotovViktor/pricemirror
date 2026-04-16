@@ -7,6 +7,7 @@ if sys.platform == 'win32':
 import re
 import os
 import urllib.parse
+import httpx
 import numpy as np
 import cv2
 import easyocr
@@ -133,10 +134,47 @@ def _validate_price(value: int, domain: str = "") -> bool:
     return True
 
 
+async def _try_hoff_api(url: str) -> dict | None:
+    """Bypass hoff.ru bot protection via internal product API (same as cloud_scraper)."""
+    m = re.search(r'_id(\d+)', url)
+    if not m:
+        return None
+    product_id = m.group(1)
+    api_url = f"https://hoff.ru/api/v2/catalog/products/{product_id}/"
+    try:
+        async with httpx.AsyncClient(
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+            follow_redirects=True, timeout=15
+        ) as client:
+            resp = await client.get(api_url)
+            print(f"[hoff.ru/api] HTTP {resp.status_code} for product {product_id}")
+            if resp.status_code == 200:
+                data = resp.json()
+                price = (
+                    data.get("price")
+                    or data.get("salePrice")
+                    or data.get("currentPrice")
+                    or (data.get("offers") or [{}])[0].get("price")
+                )
+                if price and _validate_price(int(float(str(price).replace(" ", "")))):
+                    return {"price": int(float(str(price).replace(" ", ""))), "image_url": None}
+    except Exception as e:
+        print(f"[hoff.ru/api] Error: {e}")
+    return None
+
+
 async def scrape_product_details(url: str):
     """Scrapes both price and image URL from a product page"""
     raw_domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
     domain = _resolve_store_domain(raw_domain)
+
+    # hoff.ru blocks Playwright with 401 — use internal API shortcut instead
+    if domain == "hoff.ru":
+        result = await _try_hoff_api(url)
+        if result:
+            return result
+        print("[hoff.ru] API bypass failed, skipping (site blocks scraping)")
+        return {"price": None, "image_url": None}
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(

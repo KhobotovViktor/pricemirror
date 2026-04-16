@@ -10,7 +10,8 @@ CREATE TABLE product_category (
 CREATE TABLE competitor_store (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    domain VARCHAR(255) UNIQUE NOT NULL
+    domain VARCHAR(255) UNIQUE NOT NULL,
+    location VARCHAR(255) NOT NULL DEFAULT 'Торговая сеть'
 );
 
 -- 3. OurProduct

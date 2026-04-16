@@ -1271,6 +1271,71 @@ async def update_our_store_color(color: str = Form(...), user_id: str = Depends(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/stores")
+async def create_store(request: Request, user_id: str = Depends(get_current_user)):
+    """Create a new competitor store."""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        data = await request.json()
+        name = (data.get("name") or "").strip()
+        domain = (data.get("domain") or "").strip().lower().removeprefix("www.")
+        location = (data.get("location") or "Торговая сеть").strip()
+        if not name or not domain:
+            raise HTTPException(status_code=400, detail="Название и домен обязательны")
+        result = supabase.table("competitor_store").insert({
+            "name": name,
+            "domain": domain,
+            "location": location
+        }).execute()
+        if result.data:
+            return {"status": "success", "store": result.data[0]}
+        raise HTTPException(status_code=500, detail="Ошибка создания магазина")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.put("/api/stores/{store_id}")
+async def update_store(store_id: int, request: Request, user_id: str = Depends(get_current_user)):
+    """Update name, domain and/or location of a competitor store."""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        data = await request.json()
+        update = {}
+        if "name" in data and data["name"].strip():
+            update["name"] = data["name"].strip()
+        if "domain" in data and data["domain"].strip():
+            update["domain"] = data["domain"].strip().lower().removeprefix("www.")
+        if "location" in data:
+            update["location"] = (data["location"] or "Торговая сеть").strip()
+        if not update:
+            return {"status": "error", "message": "Нет данных для обновления"}
+        supabase.table("competitor_store").update(update).eq("id", store_id).execute()
+        return {"status": "success", "message": "Магазин обновлён"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/stores/{store_id}")
+async def delete_store(store_id: int, user_id: str = Depends(get_current_user)):
+    """Delete a competitor store (only if it has no linked products)."""
+    if not user_id:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+    try:
+        linked = supabase.table("competitor_product").select("id").eq("store_id", store_id).limit(1).execute().data
+        if linked:
+            raise HTTPException(status_code=400, detail="Нельзя удалить магазин: есть привязанные товары")
+        supabase.table("competitor_store").delete().eq("id", store_id).execute()
+        return {"status": "success", "message": "Магазин удалён"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # --- Bitrix24 Integration ---
 
 @app.post("/api/telegram/test")

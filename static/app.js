@@ -1780,6 +1780,7 @@ async function loadSettings() {
         console.error('Failed to load settings:', err);
     }
     loadStoreColors();
+    loadCompetitors();
 }
 
 async function loadStoreColors() {
@@ -2346,9 +2347,114 @@ const _origSwitchSection = window.switchSection;
 if (typeof _origSwitchSection === 'function') {
     window.switchSection = function(sectionId) {
         _origSwitchSection(sectionId);
-        if (sectionId === 'settings') loadUsers();
+        if (sectionId === 'settings') { loadUsers(); loadCompetitors(); }
     };
 }
+
+// --- Competitor Management ---
+
+const STORE_LOCATIONS = [
+    'Торговая сеть', 'Архангельск', 'Вологда', 'Белозерск', 'Грязовец',
+    'Иваново', 'Кинешма', 'Коряжма', 'Котлас', 'Няндома', 'Сокол',
+    'Тейково', 'Тотьма', 'Тутаев', 'Фурманов', 'Череповец', 'Ярославль'
+];
+
+function locationSelect(selectedValue, idAttr) {
+    return `<select class="form-select" ${idAttr} style="font-size:0.8rem;padding:3px 6px;height:28px;">
+        ${STORE_LOCATIONS.map(l => `<option value="${l}"${l === selectedValue ? ' selected' : ''}>${l}</option>`).join('')}
+    </select>`;
+}
+
+async function loadCompetitors() {
+    const container = document.getElementById('competitorsList');
+    if (!container) return;
+    try {
+        const resp = await fetch('/api/stores', { credentials: 'include' });
+        if (!resp.ok) return;
+        const stores = await resp.json();
+        if (!stores.length) { container.innerHTML = '<p class="text-muted text-sm">Нет конкурентов</p>'; return; }
+        let html = `<table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+            <thead><tr style="border-bottom:2px solid var(--border-soft);">
+                <th style="padding:6px 4px;text-align:left;color:var(--text-muted);font-weight:600;width:32px;">ID</th>
+                <th style="padding:6px 4px;text-align:left;color:var(--text-muted);font-weight:600;">Название</th>
+                <th style="padding:6px 4px;text-align:left;color:var(--text-muted);font-weight:600;">Домен</th>
+                <th style="padding:6px 4px;text-align:left;color:var(--text-muted);font-weight:600;">Расположение</th>
+                <th style="padding:6px 4px;width:80px;"></th>
+            </tr></thead><tbody>`;
+        for (const s of stores) {
+            html += `<tr style="border-bottom:1px solid var(--border-soft);" id="storeRow_${s.id}">
+                <td style="padding:6px 4px;color:var(--text-muted);">#${s.id}</td>
+                <td style="padding:6px 4px;"><input class="form-input" id="storeName_${s.id}" value="${s.name}" style="font-size:0.8rem;padding:3px 6px;height:28px;"></td>
+                <td style="padding:6px 4px;"><input class="form-input" id="storeDomain_${s.id}" value="${s.domain}" style="font-size:0.8rem;padding:3px 6px;height:28px;"></td>
+                <td style="padding:6px 4px;">${locationSelect(s.location || 'Торговая сеть', `id="storeLoc_${s.id}"`)}</td>
+                <td style="padding:6px 4px;white-space:nowrap;">
+                    <button class="btn btn-primary btn-sm" style="font-size:0.7rem;padding:3px 8px;margin-right:4px;" onclick="window.saveCompetitor(${s.id})"><i class="fa-solid fa-floppy-disk"></i></button>
+                    <button class="btn btn-secondary btn-sm" style="font-size:0.7rem;padding:3px 8px;color:var(--danger);" onclick="window.deleteCompetitor(${s.id}, '${s.name.replace(/'/g, "\\'")}')"><i class="fa-solid fa-trash-can"></i></button>
+                </td>
+            </tr>`;
+        }
+        html += '</tbody></table>';
+        container.innerHTML = html;
+    } catch (err) { console.error('Competitors load error:', err); }
+}
+
+window.createCompetitor = async () => {
+    const name = document.getElementById('newStoreName')?.value?.trim();
+    const domain = document.getElementById('newStoreDomain')?.value?.trim();
+    const location = document.getElementById('newStoreLocation')?.value || 'Торговая сеть';
+    const resultDiv = document.getElementById('competitorCreateResult');
+    if (!name || !domain) {
+        if (resultDiv) resultDiv.innerHTML = '<span style="color:var(--danger);">Заполните название и домен</span>';
+        return;
+    }
+    try {
+        const r = await fetch('/api/stores', {
+            method: 'POST', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, domain, location })
+        });
+        const data = await r.json();
+        if (r.ok && data.status === 'success') {
+            if (resultDiv) resultDiv.innerHTML = `<span style="color:var(--success);">Конкурент "${name}" добавлен</span>`;
+            document.getElementById('newStoreName').value = '';
+            document.getElementById('newStoreDomain').value = '';
+            document.getElementById('newStoreLocation').value = 'Торговая сеть';
+            loadCompetitors();
+            loadStoreColors();
+        } else {
+            if (resultDiv) resultDiv.innerHTML = `<span style="color:var(--danger);">${data.detail || data.message || 'Ошибка'}</span>`;
+        }
+    } catch (e) {
+        if (resultDiv) resultDiv.innerHTML = `<span style="color:var(--danger);">Ошибка: ${e.message}</span>`;
+    }
+};
+
+window.saveCompetitor = async (id) => {
+    const name = document.getElementById(`storeName_${id}`)?.value?.trim();
+    const domain = document.getElementById(`storeDomain_${id}`)?.value?.trim();
+    const location = document.getElementById(`storeLoc_${id}`)?.value || 'Торговая сеть';
+    if (!name || !domain) { alert('Название и домен не могут быть пустыми'); return; }
+    try {
+        const r = await fetch(`/api/stores/${id}`, {
+            method: 'PUT', credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, domain, location })
+        });
+        const data = await r.json();
+        if (r.ok) { loadStoreColors(); }
+        else alert(data.detail || 'Ошибка сохранения');
+    } catch (e) { alert('Ошибка: ' + e.message); }
+};
+
+window.deleteCompetitor = async (id, name) => {
+    if (!confirm(`Удалить конкурента "${name}"?\nЭто невозможно, если к нему привязаны товары.`)) return;
+    try {
+        const r = await fetch(`/api/stores/${id}`, { method: 'DELETE', credentials: 'include' });
+        const data = await r.json();
+        if (r.ok) { loadCompetitors(); loadStoreColors(); }
+        else alert(data.detail || 'Ошибка удаления');
+    } catch (e) { alert('Ошибка: ' + e.message); }
+};
 
 // --- PDF Report (client-side) ---
 

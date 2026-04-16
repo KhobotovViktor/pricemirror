@@ -568,6 +568,60 @@
                         <div id="storeColorList"></div>
                     </div>
 
+                    <!-- Competitor Management -->
+                    <div class="card max-w-md mt-lg">
+                        <h2 class="section-title">
+                            <i class="fa-solid fa-store" style="color:var(--secondary)"></i>
+                            Управление конкурентами
+                        </h2>
+                        <p class="text-muted text-sm mb-lg">
+                            Добавляйте и редактируйте магазины конкурентов. Удаление возможно только если к магазину не привязаны товары.
+                        </p>
+
+                        <!-- Add competitor form -->
+                        <div class="settings-grid mb-lg">
+                            <div class="form-group mb-0">
+                                <label class="form-label">Название</label>
+                                <input class="form-input" type="text" id="newStoreName" placeholder="Название магазина">
+                            </div>
+                            <div class="form-group mb-0">
+                                <label class="form-label">Домен (сайт)</label>
+                                <input class="form-input" type="text" id="newStoreDomain" placeholder="example.ru">
+                            </div>
+                            <div class="form-group mb-0">
+                                <label class="form-label">Расположение</label>
+                                <select class="form-select" id="newStoreLocation">
+                                    <option value="Торговая сеть">Торговая сеть</option>
+                                    <option value="Архангельск">Архангельск</option>
+                                    <option value="Вологда">Вологда</option>
+                                    <option value="Белозерск">Белозерск</option>
+                                    <option value="Грязовец">Грязовец</option>
+                                    <option value="Иваново">Иваново</option>
+                                    <option value="Кинешма">Кинешма</option>
+                                    <option value="Коряжма">Коряжма</option>
+                                    <option value="Котлас">Котлас</option>
+                                    <option value="Няндома">Няндома</option>
+                                    <option value="Сокол">Сокол</option>
+                                    <option value="Тейково">Тейково</option>
+                                    <option value="Тотьма">Тотьма</option>
+                                    <option value="Тутаев">Тутаев</option>
+                                    <option value="Фурманов">Фурманов</option>
+                                    <option value="Череповец">Череповец</option>
+                                    <option value="Ярославль">Ярославль</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="settings-actions mb-lg">
+                            <button type="button" class="btn btn-primary" onclick="window.createCompetitor()">
+                                <i class="fa-solid fa-plus"></i> Добавить конкурента
+                            </button>
+                            <div id="competitorCreateResult" class="settings-result"></div>
+                        </div>
+
+                        <!-- Competitors list -->
+                        <div id="competitorsList"></div>
+                    </div>
+
                     <!-- User Management -->
                     <div class="card max-w-md mt-lg">
                         <h2 class="section-title">

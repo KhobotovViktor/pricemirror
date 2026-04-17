@@ -10,4 +10,5 @@ apscheduler
 PyJWT
 starlette
 httpx
+curl_cffi
 bcrypt

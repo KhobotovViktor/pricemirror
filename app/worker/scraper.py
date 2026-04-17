@@ -19,6 +19,7 @@ try:
 except Exception:
     _stealth_fn = None
     _STEALTH_AVAILABLE = False
+
 from datetime import datetime, timezone, timedelta as _timedelta
 MSK = timezone(_timedelta(hours=3))
 from dotenv import load_dotenv
@@ -186,91 +187,168 @@ _HOFF_HEADERS = {
 }
 
 
-async def _try_hoff_httpx(url: str) -> dict | None:
-    """Fallback for hoff.ru: direct HTTP request + extract price from Next.js SSR HTML.
-    Used when internal API returns 404 (outdated product ID in stored URL).
+def _extract_price_from_hoff_html(html: str) -> tuple[int | None, str | None]:
+    """Parse price and image from hoff.ru product page HTML.
+    Returns (price, image_url) or (None, None).
     """
-    try:
-        async with httpx.AsyncClient(
-            headers={**_HOFF_HEADERS, "Referer": "https://hoff.ru/"},
-            follow_redirects=True,
-            timeout=25,
-        ) as client:
-            # Warm session with homepage to pick up cookies/anti-bot tokens
+    price = None
+    image_url = None
+
+    # 1. __NEXT_DATA__ (Next.js SSR — most reliable)
+    nd_m = re.search(r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>', html, re.DOTALL)
+    if nd_m:
+        try:
+            nd = json.loads(nd_m.group(1))
+            nd_str = json.dumps(nd)
+            for key in ('"price"', '"currentPrice"', '"salePrice"', '"finalPrice"', '"basePrice"'):
+                pm = re.search(key + r'\s*:\s*(\d{3,7})', nd_str)
+                if pm:
+                    candidate = int(pm.group(1))
+                    if _validate_price(candidate, "hoff.ru"):
+                        price = candidate
+                        print(f"[hoff.ru] Price {candidate} via __NEXT_DATA__ ({key})")
+                        break
+        except Exception as e:
+            print(f"[hoff.ru] __NEXT_DATA__ parse error: {e}")
+
+    # 2. JSON-LD schema.org
+    if not price:
+        for block in re.findall(
+            r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>', html, re.DOTALL
+        ):
             try:
-                await client.get("https://hoff.ru/", timeout=10)
+                data = json.loads(block)
+                if isinstance(data, list): data = data[0]
+                offers = data.get("offers")
+                if isinstance(offers, list): offers = offers[0]
+                if isinstance(offers, dict):
+                    p = offers.get("price") or offers.get("lowPrice")
+                    if p:
+                        candidate = int(round(float(str(p).replace(",", ".").replace(" ", ""))))
+                        if _validate_price(candidate, "hoff.ru"):
+                            price = candidate
+                            print(f"[hoff.ru] Price {candidate} via JSON-LD")
+                            break
+            except Exception:
+                continue
+
+    # 3. meta itemprop="price"
+    if not price:
+        mp = (re.search(r'itemprop=["\']price["\'][^>]*content=["\']([^"\']+)["\']', html) or
+              re.search(r'content=["\']([^"\']+)["\'][^>]*itemprop=["\']price["\']', html))
+        if mp:
+            cleaned = re.sub(r'[^\d]', '', mp.group(1))
+            if cleaned and _validate_price(int(cleaned), "hoff.ru"):
+                price = int(cleaned)
+                print(f"[hoff.ru] Price {price} via meta itemprop")
+
+    # og:image
+    img_m = (re.search(r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html) or
+             re.search(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image["\']', html))
+    if img_m:
+        image_url = img_m.group(1)
+
+    return price, image_url
+
+
+
+
+async def _scrape_hoff_playwright(url: str) -> dict:
+    """Scrape hoff.ru via Playwright.
+    Qrator bot protection returns 401 on first load, then runs a JS challenge
+    that auto-refreshes the page. We let the browser handle it and wait.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled"]
+        )
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080}
+        )
+        page = await context.new_page()
+        if _STEALTH_AVAILABLE:
+            try:
+                await _stealth_fn(page)
+            except Exception:
+                pass
+        try:
+            await page.set_extra_http_headers({
+                "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            })
+            # Navigate — Qrator sends 401 + JS challenge page; browser auto-solves it
+            await page.goto(url, wait_until="load", timeout=60000)
+            # Wait for Qrator JS challenge to complete and page to reload
+            await asyncio.sleep(10)
+
+            title = await page.title()
+            print(f"[hoff.ru/playwright] Loaded: '{title[:60]}'")
+
+            price = None
+            image_url = None
+
+            # Price: meta[itemprop='price'] is reliable on hoff.ru after challenge
+            try:
+                el = await page.wait_for_selector("meta[itemprop='price']", state="attached", timeout=5000)
+                if el:
+                    val = await el.get_attribute("content")
+                    if val:
+                        candidate = int(re.sub(r'[^\d]', '', val))
+                        if _validate_price(candidate, "hoff.ru"):
+                            price = candidate
+                            print(f"[hoff.ru/playwright] Price {price} via meta itemprop")
             except Exception:
                 pass
 
-            resp = await client.get(url, headers={**_HOFF_HEADERS, "Referer": "https://hoff.ru/"})
-            print(f"[hoff.ru/httpx] HTTP {resp.status_code} for {url}")
-            if resp.status_code != 200:
-                return None
-
-            html = resp.text
-
-            # 1. __NEXT_DATA__ (hoff.ru is a Next.js app — price lives in SSR JSON)
-            nd_m = re.search(
-                r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
-                html, re.DOTALL
-            )
-            if nd_m:
+            # Fallback: JSON-LD / itemprop via JS eval
+            if not price:
                 try:
-                    nd = json.loads(nd_m.group(1))
-                    nd_str = json.dumps(nd)
-                    for key in ('"price"', '"currentPrice"', '"salePrice"', '"finalPrice"', '"basePrice"'):
-                        pm = re.search(key + r'\s*:\s*(\d{3,7})', nd_str)
-                        if pm:
-                            candidate = int(pm.group(1))
-                            if _validate_price(candidate, "hoff.ru"):
-                                print(f"[hoff.ru/httpx] Price {candidate} via __NEXT_DATA__ key {key}")
-                                # Try to grab og:image
-                                img_m = re.search(
-                                    r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html
-                                )
-                                img = img_m.group(1) if img_m else None
-                                return {"price": candidate, "image_url": img}
+                    js_price = await page.evaluate('''() => {
+                        const meta = document.querySelector("meta[itemprop='price']");
+                        if (meta && meta.content) return meta.content;
+                        for (const s of document.querySelectorAll("script[type='application/ld+json']")) {
+                            try {
+                                const d = JSON.parse(s.textContent);
+                                const items = Array.isArray(d) ? d : [d];
+                                for (const i of items) {
+                                    const o = i.offers || (i["@type"]==="Offer" ? i : null);
+                                    const ol = Array.isArray(o) ? o : (o ? [o] : []);
+                                    for (const off of ol) { if (off.price) return String(off.price); }
+                                }
+                            } catch(e) {}
+                        }
+                        return null;
+                    }''')
+                    if js_price:
+                        candidate = int(re.sub(r'[^\d]', '', str(js_price)))
+                        if _validate_price(candidate, "hoff.ru"):
+                            price = candidate
+                            print(f"[hoff.ru/playwright] Price {price} via JS eval")
                 except Exception as e:
-                    print(f"[hoff.ru/httpx] __NEXT_DATA__ parse error: {e}")
+                    print(f"[hoff.ru/playwright] JS eval error: {e}")
 
-            # 2. JSON-LD schema.org
-            for block in re.findall(
-                r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
-                html, re.DOTALL
-            ):
-                try:
-                    data = json.loads(block)
-                    if isinstance(data, list):
-                        data = data[0]
-                    offers = data.get("offers")
-                    if isinstance(offers, list):
-                        offers = offers[0]
-                    if isinstance(offers, dict):
-                        p = offers.get("price") or offers.get("lowPrice")
-                        if p:
-                            candidate = int(round(float(str(p).replace(",", ".").replace(" ", ""))))
-                            if _validate_price(candidate, "hoff.ru"):
-                                print(f"[hoff.ru/httpx] Price {candidate} via JSON-LD")
-                                return {"price": candidate, "image_url": None}
-                except Exception:
-                    continue
+            # Image via og:image
+            try:
+                og = await page.evaluate('''() => {
+                    const og = document.querySelector("meta[property='og:image']");
+                    return og ? og.content : null;
+                }''')
+                if og:
+                    image_url = og
+            except Exception:
+                pass
 
-            # 3. meta itemprop="price"
-            mp = re.search(r'itemprop=["\']price["\'][^>]*content=["\']([^"\']+)["\']', html)
-            if not mp:
-                mp = re.search(r'content=["\']([^"\']+)["\'][^>]*itemprop=["\']price["\']', html)
-            if mp:
-                cleaned = re.sub(r'[^\d]', '', mp.group(1))
-                if cleaned:
-                    candidate = int(cleaned)
-                    if _validate_price(candidate, "hoff.ru"):
-                        print(f"[hoff.ru/httpx] Price {candidate} via meta itemprop")
-                        return {"price": candidate, "image_url": None}
+            if not price:
+                print(f"[hoff.ru/playwright] Failed to extract price from {url}")
 
-            print(f"[hoff.ru/httpx] Could not extract price from HTML ({len(html)} bytes)")
-    except Exception as e:
-        print(f"[hoff.ru/httpx] Error: {e}")
-    return None
+            return {"price": price, "image_url": image_url}
+        except Exception as e:
+            print(f"[hoff.ru/playwright] Error: {e}")
+            return {"price": None, "image_url": None}
+        finally:
+            await browser.close()
 
 
 async def scrape_product_details(url: str):
@@ -278,18 +356,18 @@ async def scrape_product_details(url: str):
     raw_domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
     domain = _resolve_store_domain(raw_domain)
 
-    # hoff.ru blocks Playwright — try internal API first, then httpx HTML fallback
+    # hoff.ru uses Qrator bot protection (returns 401 on first load, then JS challenge
+    # auto-solves in a real browser). Strategy: try fast API first, then Playwright
+    # with extended wait so Qrator challenge can complete.
     if domain == "hoff.ru":
+        # 1. Internal product API (instant, no browser needed)
         result = await _try_hoff_api(url)
         if result:
             return result
-        # API returned 404 (outdated product ID) or failed — try direct HTTP scrape
-        print("[hoff.ru] API failed, trying direct HTTP scrape...")
-        result = await _try_hoff_httpx(url)
-        if result:
-            return result
-        print("[hoff.ru] All methods failed, skipping.")
-        return {"price": None, "image_url": None}
+        # 2. Playwright — Qrator challenge solves automatically in real Chromium.
+        #    We must NOT abort on 401 status and wait ~8s for the page to refresh.
+        print("[hoff.ru] API failed, trying Playwright with Qrator wait...")
+        return await _scrape_hoff_playwright(url)
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(

@@ -314,6 +314,8 @@ async def scrape_product_details(url: str) -> dict:
         result = await _try_hoff_api(url)
         if result:
             return result
+        # API returned 404 — fall through to httpx scrape (Next.js __NEXT_DATA__)
+        print("[Cloud/hoff] API failed, falling through to httpx scrape...")
 
     # 1. Try Edge Function (handles JS-rendered pages)
     if EDGE_FUNCTION_URL and SUPABASE_JWT_KEY:

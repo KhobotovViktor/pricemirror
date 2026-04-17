@@ -6,6 +6,7 @@ if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 import re
 import os
+import json
 import urllib.parse
 import httpx
 import numpy as np
@@ -171,17 +172,123 @@ async def _try_hoff_api(url: str) -> dict | None:
     return None
 
 
+_HOFF_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Cache-Control": "max-age=0",
+}
+
+
+async def _try_hoff_httpx(url: str) -> dict | None:
+    """Fallback for hoff.ru: direct HTTP request + extract price from Next.js SSR HTML.
+    Used when internal API returns 404 (outdated product ID in stored URL).
+    """
+    try:
+        async with httpx.AsyncClient(
+            headers={**_HOFF_HEADERS, "Referer": "https://hoff.ru/"},
+            follow_redirects=True,
+            timeout=25,
+        ) as client:
+            # Warm session with homepage to pick up cookies/anti-bot tokens
+            try:
+                await client.get("https://hoff.ru/", timeout=10)
+            except Exception:
+                pass
+
+            resp = await client.get(url, headers={**_HOFF_HEADERS, "Referer": "https://hoff.ru/"})
+            print(f"[hoff.ru/httpx] HTTP {resp.status_code} for {url}")
+            if resp.status_code != 200:
+                return None
+
+            html = resp.text
+
+            # 1. __NEXT_DATA__ (hoff.ru is a Next.js app — price lives in SSR JSON)
+            nd_m = re.search(
+                r'<script[^>]+id=["\']__NEXT_DATA__["\'][^>]*>(.*?)</script>',
+                html, re.DOTALL
+            )
+            if nd_m:
+                try:
+                    nd = json.loads(nd_m.group(1))
+                    nd_str = json.dumps(nd)
+                    for key in ('"price"', '"currentPrice"', '"salePrice"', '"finalPrice"', '"basePrice"'):
+                        pm = re.search(key + r'\s*:\s*(\d{3,7})', nd_str)
+                        if pm:
+                            candidate = int(pm.group(1))
+                            if _validate_price(candidate, "hoff.ru"):
+                                print(f"[hoff.ru/httpx] Price {candidate} via __NEXT_DATA__ key {key}")
+                                # Try to grab og:image
+                                img_m = re.search(
+                                    r'<meta[^>]+property=["\']og:image["\'][^>]+content=["\']([^"\']+)["\']', html
+                                )
+                                img = img_m.group(1) if img_m else None
+                                return {"price": candidate, "image_url": img}
+                except Exception as e:
+                    print(f"[hoff.ru/httpx] __NEXT_DATA__ parse error: {e}")
+
+            # 2. JSON-LD schema.org
+            for block in re.findall(
+                r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+                html, re.DOTALL
+            ):
+                try:
+                    data = json.loads(block)
+                    if isinstance(data, list):
+                        data = data[0]
+                    offers = data.get("offers")
+                    if isinstance(offers, list):
+                        offers = offers[0]
+                    if isinstance(offers, dict):
+                        p = offers.get("price") or offers.get("lowPrice")
+                        if p:
+                            candidate = int(round(float(str(p).replace(",", ".").replace(" ", ""))))
+                            if _validate_price(candidate, "hoff.ru"):
+                                print(f"[hoff.ru/httpx] Price {candidate} via JSON-LD")
+                                return {"price": candidate, "image_url": None}
+                except Exception:
+                    continue
+
+            # 3. meta itemprop="price"
+            mp = re.search(r'itemprop=["\']price["\'][^>]*content=["\']([^"\']+)["\']', html)
+            if not mp:
+                mp = re.search(r'content=["\']([^"\']+)["\'][^>]*itemprop=["\']price["\']', html)
+            if mp:
+                cleaned = re.sub(r'[^\d]', '', mp.group(1))
+                if cleaned:
+                    candidate = int(cleaned)
+                    if _validate_price(candidate, "hoff.ru"):
+                        print(f"[hoff.ru/httpx] Price {candidate} via meta itemprop")
+                        return {"price": candidate, "image_url": None}
+
+            print(f"[hoff.ru/httpx] Could not extract price from HTML ({len(html)} bytes)")
+    except Exception as e:
+        print(f"[hoff.ru/httpx] Error: {e}")
+    return None
+
+
 async def scrape_product_details(url: str):
     """Scrapes both price and image URL from a product page"""
     raw_domain = urllib.parse.urlparse(url).netloc.replace("www.", "")
     domain = _resolve_store_domain(raw_domain)
 
-    # hoff.ru blocks Playwright with 401 — use internal API shortcut instead
+    # hoff.ru blocks Playwright — try internal API first, then httpx HTML fallback
     if domain == "hoff.ru":
         result = await _try_hoff_api(url)
         if result:
             return result
-        print("[hoff.ru] API bypass failed, skipping (site blocks scraping)")
+        # API returned 404 (outdated product ID) or failed — try direct HTTP scrape
+        print("[hoff.ru] API failed, trying direct HTTP scrape...")
+        result = await _try_hoff_httpx(url)
+        if result:
+            return result
+        print("[hoff.ru] All methods failed, skipping.")
         return {"price": None, "image_url": None}
 
     async with async_playwright() as p:

@@ -979,56 +979,55 @@ async function renderTrendReport() {
     // Build datasets from trend data, filtered by category products
     // trend: { storeId: { store_name, data: { date: avg_price } } }
     const datasets = [];
-    let allDates = new Set();
     let ci = 0;
 
     // Build store color lookup
     const storeColorById = {};
     for (const s of trendStores) storeColorById[String(s.id)] = s.color || '#64748b';
 
-    // Add "our" store average as a reference line
+    // --- First pass: collect ALL dates so every dataset is positionally aligned ---
+    const allDatesSet = new Set();
+    for (const [, sdata] of Object.entries(trend)) {
+        Object.keys(sdata.data).forEach(d => allDatesSet.add(d));
+    }
+    const allDates = [...allDatesSet].sort();
+
+    // Add "our" store average as a flat reference line across all dates
     const ourProducts = baseData.products.filter(p => {
         if (productIds && !productIds.has(p.id)) return false;
         return p.current_price;
     });
-    if (ourProducts.length > 0) {
-        for (const [sid, sdata] of Object.entries(trend)) {
-            Object.keys(sdata.data).forEach(d => allDates.add(d));
-        }
-        const sortedDates = [...allDates].sort();
-        if (sortedDates.length > 0) {
-            const ourAvg = Math.round(ourProducts.reduce((s, p) => s + p.current_price, 0) / ourProducts.length);
-            const ourColor = baseData.our_store_color || '#6366f1';
-            datasets.push({
-                label: 'Аллея Мебели (средняя)',
-                data: sortedDates.map(d => ({ x: d, y: ourAvg })),
-                borderColor: ourColor,
-                backgroundColor: ourColor + '08',
-                borderWidth: 3,
-                borderDash: [8, 4],
-                fill: false,
-                tension: 0,
-                pointRadius: 0,
-                pointHitRadius: 8,
-                pointHoverRadius: 5,
-                pointHoverBackgroundColor: ourColor,
-                pointHoverBorderColor: '#fff',
-                pointHoverBorderWidth: 2,
-                order: 0,
-            });
-        }
+    if (ourProducts.length > 0 && allDates.length > 0) {
+        const ourAvg = Math.round(ourProducts.reduce((s, p) => s + p.current_price, 0) / ourProducts.length);
+        const ourColor = baseData.our_store_color || '#6366f1';
+        datasets.push({
+            label: 'Аллея Мебели (средняя)',
+            data: allDates.map(() => ourAvg),
+            borderColor: ourColor,
+            backgroundColor: ourColor + '08',
+            borderWidth: 3,
+            borderDash: [8, 4],
+            fill: false,
+            tension: 0,
+            pointRadius: 0,
+            pointHitRadius: 8,
+            pointHoverRadius: 5,
+            pointHoverBackgroundColor: ourColor,
+            pointHoverBorderColor: '#fff',
+            pointHoverBorderWidth: 2,
+            order: 0,
+        });
     }
 
+    // --- Second pass: build competitor datasets using positional arrays ---
     for (const [sid, sdata] of Object.entries(trend)) {
         if (!allowedTrendStores.has(sid)) continue;
-
-        const dates = Object.keys(sdata.data);
-        dates.forEach(d => allDates.add(d));
 
         const color = storeColorById[sid] || REPORT_COLORS[ci % REPORT_COLORS.length];
         datasets.push({
             label: sdata.store_name,
-            data: dates.map(d => ({ x: d, y: sdata.data[d] })),
+            // Positional array aligned to allDates; null for missing dates (no data gap)
+            data: allDates.map(d => sdata.data[d] ?? null),
             borderColor: color,
             backgroundColor: color + '12',
             fill: true,
@@ -1044,8 +1043,6 @@ async function renderTrendReport() {
         });
         ci++;
     }
-
-    allDates = [...allDates].sort();
 
     if (datasets.length === 0 || allDates.length === 0) {
         const canvas = document.getElementById('trendChart');

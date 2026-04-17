@@ -69,13 +69,25 @@ class Bitrix24Notifier:
 
     @classmethod
     def send_price_alert(cls, product_name: str, old_price, new_price, store_name: str):
-        """Send a formatted price drop alert to Bitrix24 chat."""
+        """Send an alert to Bitrix24 chat: competitor price is below our price.
+        old_price = our current price, new_price = competitor price.
+        """
+        our_price = old_price
+        competitor_price = new_price
+        try:
+            diff = int(our_price) - int(competitor_price)
+            pct = round(diff / int(our_price) * 100, 1) if our_price else 0
+            diff_str = f"\nРазница: -{diff} руб. (-{pct}%)"
+        except Exception:
+            diff_str = ""
+
         msg = (
-            f"[B]Снижение цены конкурента![/B]\n"
+            f"[B]Конкурент продаёт дешевле нас![/B]\n"
             f"Товар: [I]{product_name}[/I]\n"
             f"Магазин: [B]{store_name}[/B]\n"
-            f"Старая цена: {old_price} руб.\n"
-            f"Новая цена: [B]{new_price} руб.[/B]"
+            f"Наша цена: {our_price} руб.\n"
+            f"Цена конкурента: [B]{competitor_price} руб.[/B]"
+            f"{diff_str}"
         )
         cls.send_message(msg)
 

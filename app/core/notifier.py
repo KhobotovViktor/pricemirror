@@ -48,24 +48,37 @@ class PriceNotifier:
 
     @classmethod
     def send_price_alert(cls, product_name, old_price, new_price, store_name):
-        """Alert: competitor price dropped BELOW our price."""
+        """Alert: competitor price is BELOW our price.
+        old_price = our current price, new_price = competitor price.
+        """
+        our_price = old_price
+        competitor_price = new_price
+        try:
+            diff = int(our_price) - int(competitor_price)
+            pct = round(diff / int(our_price) * 100, 1) if our_price else 0
+            diff_str = f"\nРазница: -{diff} ₽ (-{pct}%)"
+        except Exception:
+            diff_str = ""
+
         # 1. Telegram (HTML)
         msg = (
-            "\U0001f4c9 <b>\u0421\u043d\u0438\u0436\u0435\u043d\u0438\u0435 \u0446\u0435\u043d\u044b!</b>\n"
-            f"\u0422\u043e\u0432\u0430\u0440: <i>{product_name}</i>\n"
-            f"\u041c\u0430\u0433\u0430\u0437\u0438\u043d: <b>{store_name}</b>\n"
-            f"\u0421\u0442\u0430\u0440\u0430\u044f \u0446\u0435\u043d\u0430: {old_price} \u20bd\n"
-            f"\u041d\u043e\u0432\u0430\u044f \u0446\u0435\u043d\u0430: <b>{new_price} \u20bd</b>"
+            f"⚠️ <b>Конкурент продаёт дешевле нас!</b>\n"
+            f"Товар: <i>{product_name}</i>\n"
+            f"Магазин: <b>{store_name}</b>\n"
+            f"Наша цена: {our_price} ₽\n"
+            f"Цена конкурента: <b>{competitor_price} ₽</b>"
+            f"{diff_str}"
         )
         cls.send_telegram(msg)
 
         # 2. Bitrix24 (BB-code)
         bb = (
-            f"[B]\u0421\u043d\u0438\u0436\u0435\u043d\u0438\u0435 \u0446\u0435\u043d\u044b \u043a\u043e\u043d\u043a\u0443\u0440\u0435\u043d\u0442\u0430![/B]\n"
-            f"\u0422\u043e\u0432\u0430\u0440: [I]{product_name}[/I]\n"
-            f"\u041c\u0430\u0433\u0430\u0437\u0438\u043d: [B]{store_name}[/B]\n"
-            f"\u0421\u0442\u0430\u0440\u0430\u044f \u0446\u0435\u043d\u0430: {old_price} \u0440\u0443\u0431.\n"
-            f"\u041d\u043e\u0432\u0430\u044f \u0446\u0435\u043d\u0430: [B]{new_price} \u0440\u0443\u0431.[/B]"
+            f"[B]Конкурент продаёт дешевле нас![/B]\n"
+            f"Товар: [I]{product_name}[/I]\n"
+            f"Магазин: [B]{store_name}[/B]\n"
+            f"Наша цена: {our_price} руб.\n"
+            f"Цена конкурента: [B]{competitor_price} руб.[/B]"
+            f"{diff_str}"
         )
         cls._send_bitrix24_message(bb)
 

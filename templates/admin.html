@@ -355,6 +355,9 @@
                         <button onclick="switchReportTab('coverage')" class="report-tab" id="tab-coverage">
                             <i class="fa-solid fa-chart-pie"></i> Покрытие мониторинга
                         </button>
+                        <button onclick="switchReportTab('sync')" class="report-tab" id="tab-sync">
+                            <i class="fa-solid fa-rotate"></i> Синхронизация
+                        </button>
                     </div>
 
                     <!-- Report 1: Average Price -->
@@ -537,6 +540,22 @@
                                 </div>
                                 <div id="coverageTableContainer" style="overflow-x:auto"></div>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Report 6: Sync Status -->
+                    <div id="report-sync" class="report-panel">
+                        <div class="card">
+                            <div class="flex justify-between items-start mb-md flex-wrap gap-sm">
+                                <h2 class="section-title" style="margin-bottom:0">
+                                    <i class="fa-solid fa-rotate" style="color:var(--primary)"></i>
+                                    Статус синхронизации
+                                </h2>
+                                <button onclick="downloadReportPdf('sync')" class="btn btn-secondary btn-sm">
+                                    <i class="fa-solid fa-file-pdf"></i> Скачать PDF
+                                </button>
+                            </div>
+                            <div id="syncStatusContainer"></div>
                         </div>
                     </div>
                 </section>

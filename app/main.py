@@ -815,6 +815,79 @@ async def get_analytics_trend(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/analytics/sync-status")
+async def analytics_sync_status(user=Depends(get_current_user)):
+    """Returns last successful sync date for our store and every competitor store."""
+    try:
+        now = datetime.now(MSK)
+
+        # 1. Our store: latest entry in our_price_history
+        our_hist = supabase.table("our_price_history").select("created_at").order("created_at", desc=True).limit(1).execute().data
+        our_last_raw = our_hist[0]["created_at"] if our_hist else None
+        our_sync_dt = None
+        if our_last_raw:
+            try:
+                our_sync_dt = datetime.fromisoformat(our_last_raw.replace("Z", "+00:00")).astimezone(MSK)
+            except Exception:
+                pass
+        our_product_count = len(supabase.table("our_product").select("id").execute().data)
+
+        # 2. Competitor stores
+        stores = supabase.table("competitor_store").select("id, name, location").execute().data
+        mappings = supabase.table("competitor_product").select("store_id, last_scrape").execute().data
+
+        store_mappings: dict = defaultdict(list)
+        for m in mappings:
+            if m.get("store_id"):
+                store_mappings[m["store_id"]].append(m)
+
+        result = []
+
+        # Our store entry
+        hours_ago_our = round((now - our_sync_dt).total_seconds() / 3600, 1) if our_sync_dt else None
+        result.append({
+            "id": "our",
+            "name": "Аллея Мебели",
+            "type": "our",
+            "location": "Наш магазин",
+            "last_sync": our_sync_dt.strftime("%d.%m.%Y %H:%M") if our_sync_dt else None,
+            "last_sync_raw": our_last_raw,
+            "product_count": our_product_count,
+            "hours_ago": hours_ago_our,
+        })
+
+        # Competitor store entries
+        comp_rows = []
+        for s in stores:
+            smappings = store_mappings.get(s["id"], [])
+            scrapes = [m["last_scrape"] for m in smappings if m.get("last_scrape")]
+            last_raw = max(scrapes) if scrapes else None
+            last_dt = None
+            if last_raw:
+                try:
+                    last_dt = datetime.fromisoformat(last_raw.replace("Z", "+00:00")).astimezone(MSK)
+                except Exception:
+                    pass
+            hours_ago = round((now - last_dt).total_seconds() / 3600, 1) if last_dt else None
+            comp_rows.append({
+                "id": s["id"],
+                "name": s["name"],
+                "type": "competitor",
+                "location": s.get("location") or "—",
+                "last_sync": last_dt.strftime("%d.%m.%Y %H:%M") if last_dt else None,
+                "last_sync_raw": last_raw,
+                "product_count": len(smappings),
+                "hours_ago": hours_ago,
+            })
+
+        # Sort competitors: synced first (by last_sync_raw desc), never-synced last
+        comp_rows.sort(key=lambda x: x["last_sync_raw"] or "", reverse=True)
+        return result + comp_rows
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/analytics/{product_id}")
 async def get_product_analytics(product_id: int):
     try:

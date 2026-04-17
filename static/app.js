@@ -605,6 +605,7 @@ function switchReportTab(tabId) {
     if (tabId === 'trend') renderTrendReport();
     if (tabId === 'risk') renderRiskReport();
     if (tabId === 'coverage') renderCoverageReport();
+    if (tabId === 'sync') renderSyncStatusReport();
 }
 
 async function loadAnalyticsData(forceReload) {
@@ -1318,6 +1319,113 @@ async function renderCoverageReport() {
     document.getElementById('coverageTableContainer').innerHTML = html;
 }
 
+// ---- REPORT 6: Sync Status ----
+
+async function renderSyncStatusReport() {
+    const container = document.getElementById('syncStatusContainer');
+    if (!container) return;
+    container.innerHTML = '<p style="color:var(--text-muted);padding:1rem;">Загрузка...</p>';
+
+    let rows;
+    try {
+        const resp = await fetch('/api/analytics/sync-status', { credentials: 'include' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        rows = await resp.json();
+    } catch (e) {
+        container.innerHTML = '<p style="color:var(--danger)">Ошибка загрузки данных</p>';
+        return;
+    }
+
+    function statusBadge(hoursAgo) {
+        if (hoursAgo === null || hoursAgo === undefined) {
+            return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;background:#f1f5f9;color:#64748b;">Нет данных</span>';
+        }
+        if (hoursAgo <= 24) {
+            return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;background:#dcfce7;color:#16a34a;"><i class="fa-solid fa-circle-check"></i> Актуально</span>';
+        }
+        if (hoursAgo <= 168) {
+            return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;background:#fef3c7;color:#d97706;"><i class="fa-solid fa-clock"></i> Устарело</span>';
+        }
+        return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:20px;font-size:0.75rem;font-weight:700;background:#fee2e2;color:#dc2626;"><i class="fa-solid fa-triangle-exclamation"></i> Давно</span>';
+    }
+
+    function timeAgoText(hoursAgo) {
+        if (hoursAgo === null || hoursAgo === undefined) return '—';
+        if (hoursAgo < 1) return 'менее часа назад';
+        if (hoursAgo < 24) return `${Math.round(hoursAgo)} ч. назад`;
+        const days = Math.floor(hoursAgo / 24);
+        const hrs = Math.round(hoursAgo % 24);
+        return hrs > 0 ? `${days} д. ${hrs} ч. назад` : `${days} д. назад`;
+    }
+
+    // Summary stats
+    const total = rows.length;
+    const fresh = rows.filter(r => r.hours_ago !== null && r.hours_ago <= 24).length;
+    const stale = rows.filter(r => r.hours_ago !== null && r.hours_ago > 24 && r.hours_ago <= 168).length;
+    const old = rows.filter(r => r.hours_ago !== null && r.hours_ago > 168).length;
+    const noData = rows.filter(r => r.hours_ago === null).length;
+
+    const summaryHtml = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:24px;">
+            <div style="padding:14px 16px;background:var(--bg-surface);border-radius:var(--radius-md);border:1px solid var(--border-soft);">
+                <div style="color:var(--text-muted);font-weight:600;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;">Всего магазинов</div>
+                <div style="font-size:1.6rem;font-weight:800;color:var(--text);margin-top:4px;">${total}</div>
+            </div>
+            <div style="padding:14px 16px;background:var(--bg-surface);border-radius:var(--radius-md);border:1px solid var(--border-soft);">
+                <div style="color:var(--text-muted);font-weight:600;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;">Актуальных</div>
+                <div style="font-size:1.6rem;font-weight:800;color:#16a34a;margin-top:4px;">${fresh}</div>
+            </div>
+            <div style="padding:14px 16px;background:var(--bg-surface);border-radius:var(--radius-md);border:1px solid var(--border-soft);">
+                <div style="color:var(--text-muted);font-weight:600;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;">Устаревших (1–7 дн.)</div>
+                <div style="font-size:1.6rem;font-weight:800;color:#d97706;margin-top:4px;">${stale}</div>
+            </div>
+            <div style="padding:14px 16px;background:var(--bg-surface);border-radius:var(--radius-md);border:1px solid var(--border-soft);">
+                <div style="color:var(--text-muted);font-weight:600;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;">Давно (>7 дн.)</div>
+                <div style="font-size:1.6rem;font-weight:800;color:#dc2626;margin-top:4px;">${old}</div>
+            </div>
+            <div style="padding:14px 16px;background:var(--bg-surface);border-radius:var(--radius-md);border:1px solid var(--border-soft);">
+                <div style="color:var(--text-muted);font-weight:600;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.03em;">Нет данных</div>
+                <div style="font-size:1.6rem;font-weight:800;color:#94a3b8;margin-top:4px;">${noData}</div>
+            </div>
+        </div>`;
+
+    // Table
+    const rowsHtml = rows.map(r => {
+        const isOur = r.type === 'our';
+        const rowStyle = isOur ? 'background:var(--bg-surface);font-weight:600;' : '';
+        const nameCell = isOur
+            ? `<td style="padding:10px 14px;${rowStyle}"><span style="display:inline-flex;align-items:center;gap:6px;"><i class="fa-solid fa-store" style="color:var(--primary);font-size:0.85rem;"></i>${r.name}</span></td>`
+            : `<td style="padding:10px 14px;">${r.name}</td>`;
+        return `<tr style="${rowStyle}border-bottom:1px solid var(--border-soft);">
+            ${nameCell}
+            <td style="padding:10px 14px;color:var(--text-muted);font-size:0.85rem;">${r.location}</td>
+            <td style="padding:10px 14px;font-variant-numeric:tabular-nums;">${r.last_sync || '<span style="color:var(--text-muted)">—</span>'}</td>
+            <td style="padding:10px 14px;color:var(--text-muted);font-size:0.85rem;">${timeAgoText(r.hours_ago)}</td>
+            <td style="padding:10px 14px;text-align:center;font-weight:700;">${r.product_count}</td>
+            <td style="padding:10px 14px;">${statusBadge(r.hours_ago)}</td>
+        </tr>`;
+    }).join('');
+
+    const tableHtml = `
+        <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:0.875rem;">
+                <thead>
+                    <tr style="border-bottom:2px solid var(--border);">
+                        <th style="padding:10px 14px;text-align:left;color:var(--text-muted);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">Магазин</th>
+                        <th style="padding:10px 14px;text-align:left;color:var(--text-muted);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">Расположение</th>
+                        <th style="padding:10px 14px;text-align:left;color:var(--text-muted);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">Последняя синхронизация</th>
+                        <th style="padding:10px 14px;text-align:left;color:var(--text-muted);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">Давность</th>
+                        <th style="padding:10px 14px;text-align:center;color:var(--text-muted);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">Товаров</th>
+                        <th style="padding:10px 14px;text-align:left;color:var(--text-muted);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:700;">Статус</th>
+                    </tr>
+                </thead>
+                <tbody>${rowsHtml}</tbody>
+            </table>
+        </div>`;
+
+    container.innerHTML = summaryHtml + tableHtml;
+}
+
 // --- Batch Management Logic ---
 
 window.updateCompetitorBatchBar = () => {
@@ -1982,6 +2090,7 @@ window.renderTrendReport = renderTrendReport;
 window.onTrendPeriodChange = onTrendPeriodChange;
 window.renderRiskReport = renderRiskReport;
 window.renderCoverageReport = renderCoverageReport;
+window.renderSyncStatusReport = renderSyncStatusReport;
 window.saveStoreColor = saveStoreColor;
 window.saveOurStoreColor = saveOurStoreColor;
 

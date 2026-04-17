@@ -98,6 +98,10 @@ def _resolve_store_domain(domain: str) -> str:
     return domain
 
 
+# Domains where CSS selector probing consistently fails (SPA/React sites that
+# block automated selectors). For these, skip straight to JS eval + og:image.
+JS_EVAL_ONLY_DOMAINS = {"divan.ru"}
+
 # Phone number patterns to reject as false-positive prices
 _PHONE_PATTERNS = [
     re.compile(r'^[78]\d{10}$'),           # 7XXXXXXXXXX or 8XXXXXXXXXX (11 digits)
@@ -148,6 +152,9 @@ async def _try_hoff_api(url: str) -> dict | None:
             follow_redirects=True, timeout=15
         ) as client:
             resp = await client.get(api_url)
+            if resp.status_code == 404:
+                print(f"[hoff.ru/api] Product {product_id} not found (404) — URL may be outdated")
+                return None
             print(f"[hoff.ru/api] HTTP {resp.status_code} for product {product_id}")
             if resp.status_code == 200:
                 data = resp.json()
@@ -264,9 +271,13 @@ async def scrape_product_details(url: str):
                     return {'price': None, 'image_url': None}
             
             print(f"[{domain}] Checking selectors...")
-            
+
+            # For SPA/React sites where CSS selectors consistently fail,
+            # skip straight to JS eval to avoid 15+ seconds of selector timeouts.
+            skip_css = domain in JS_EVAL_ONLY_DOMAINS
+
             # 1. Price Extraction
-            for s in selectors["price"]:
+            for s in ([] if skip_css else selectors["price"]):
                 try:
                     # meta tags are never "visible" — use state='attached'
                     state = 'attached' if s.startswith('meta') else 'visible'
@@ -292,7 +303,7 @@ async def scrape_product_details(url: str):
                     continue
                 
             # 2. Image Extraction
-            for s in selectors["image"]:
+            for s in ([] if skip_css else selectors["image"]):
                 try:
                     el = await page.wait_for_selector(s, timeout=3000)
                     if el:

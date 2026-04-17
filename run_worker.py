@@ -35,24 +35,44 @@ MONITOR_INTERVAL = 12 * 3600  # 12 hours full re-scan
 
 
 def get_queue() -> list:
-    """Read pending scrape requests from Supabase system_settings."""
-    try:
-        row = supabase.table("system_settings").select("value").eq("key", QUEUE_KEY).execute()
-        if row.data:
-            return json.loads(row.data[0]["value"])
-    except Exception as e:
-        print(f"[Worker] Queue read error: {e}")
+    """Read pending scrape requests from Supabase system_settings.
+    Retries once on SSL/network errors (connection may go stale after long scans).
+    """
+    for attempt in range(2):
+        try:
+            row = supabase.table("system_settings").select("value").eq("key", QUEUE_KEY).execute()
+            if row.data:
+                return json.loads(row.data[0]["value"])
+            return []
+        except Exception as e:
+            err_str = str(e)
+            is_ssl_err = "EOF" in err_str or "SSL" in err_str or "ssl" in err_str or "protocol" in err_str
+            if attempt == 0 and is_ssl_err:
+                print(f"[Worker] Queue read SSL error (will retry): {e}")
+                time.sleep(3)
+                continue
+            print(f"[Worker] Queue read error: {e}")
+            break
     return []
 
 
 def clear_queue():
     """Clear the queue after processing."""
-    try:
-        supabase.table("system_settings").upsert(
-            {"key": QUEUE_KEY, "value": "[]"}, on_conflict="key"
-        ).execute()
-    except Exception as e:
-        print(f"[Worker] Queue clear error: {e}")
+    for attempt in range(2):
+        try:
+            supabase.table("system_settings").upsert(
+                {"key": QUEUE_KEY, "value": "[]"}, on_conflict="key"
+            ).execute()
+            return
+        except Exception as e:
+            err_str = str(e)
+            is_ssl_err = "EOF" in err_str or "SSL" in err_str or "ssl" in err_str or "protocol" in err_str
+            if attempt == 0 and is_ssl_err:
+                print(f"[Worker] Queue clear SSL error (will retry): {e}")
+                time.sleep(3)
+                continue
+            print(f"[Worker] Queue clear error: {e}")
+            break
 
 
 async def process_queue():

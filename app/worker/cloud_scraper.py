@@ -282,6 +282,9 @@ async def _try_hoff_api(url: str) -> dict | None:
     try:
         async with httpx.AsyncClient(headers=HTTP_HEADERS, follow_redirects=True, timeout=15) as client:
             resp = await client.get(api_url)
+            if resp.status_code == 404:
+                print(f"[Cloud/hoff-api] Product {product_id} not found (404) — URL may be outdated")
+                return None
             print(f"[Cloud/hoff-api] HTTP {resp.status_code} for product {product_id}")
             if resp.status_code == 200:
                 data = resp.json()

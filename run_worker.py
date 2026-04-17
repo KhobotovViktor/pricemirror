@@ -1,10 +1,12 @@
 """
-Price Mirror — Local Playwright Worker
-======================================
-Запускать на локальной машине. Делает две вещи:
-  1. Каждые 12 часов автоматически обновляет все цены (monitor_all)
-  2. Каждые 30 секунд проверяет очередь в Supabase и выполняет ручные запросы
-     на обновление, инициированные через интерфейс Vercel
+Price Mirror — Queue Worker (background process)
+=================================================
+Запускать на локальной машине. Работает непрерывно в фоне:
+  - Каждые 30 секунд проверяет очередь в Supabase и выполняет ручные запросы
+    на обновление, инициированные через интерфейс.
+
+Плановые полные сканирования (Пн-Пт 09:00 и 16:00) выполняются отдельным
+скриптом run_scan_once.py через планировщик задач Windows.
 
 Запуск: python run_worker.py
 """
@@ -31,7 +33,6 @@ from app.worker.scraper import scrape_specific_mapping, scrape_for_product, moni
 
 QUEUE_KEY = "scrape_queue"
 POLL_INTERVAL = 30   # seconds between queue checks
-MONITOR_INTERVAL = 12 * 3600  # 12 hours full re-scan
 
 
 def get_queue() -> list:
@@ -103,27 +104,13 @@ async def process_queue():
 
 async def main():
     print("=" * 50)
-    print("  Price Mirror — Local Worker started")
+    print("  Price Mirror — Queue Worker started")
     print(f"  Queue poll: every {POLL_INTERVAL}s")
-    print(f"  Full rescan: every {MONITOR_INTERVAL // 3600}h")
+    print("  Full scans: via Windows Task Scheduler (Mon-Fri 09:00 / 16:00)")
     print("=" * 50)
 
-    last_monitor = 0
-
     while True:
-        now = time.time()
-
-        # Full rescan on schedule
-        if now - last_monitor >= MONITOR_INTERVAL:
-            print("[Worker] Starting scheduled full price scan...")
-            try:
-                await monitor_all()
-                print("[Worker] Full scan complete.")
-            except Exception as e:
-                print(f"[Worker] Full scan error: {e}")
-            last_monitor = time.time()
-
-        # Process manual queue requests from Vercel UI
+        # Process manual queue requests from UI
         try:
             await process_queue()
         except Exception as e:

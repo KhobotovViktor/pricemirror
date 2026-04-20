@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>СЕВЕРНЫЙ РУБЕЖ</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game-wrapper">
+
+  <!-- ── Main canvas ── -->
+  <canvas id="game-canvas"></canvas>
+
+  <!-- ── HUD ── -->
+  <div id="hud">
+
+    <!-- Top stats bar -->
+    <div id="stats-bar">
+      <div class="stat-group">
+        <span class="stat-lbl">HP</span>
+        <div class="bar-wrap"><div id="hp-bar" class="bar hp-bar"></div></div>
+        <span id="hp-text"  class="stat-val">100/100</span>
+      </div>
+      <div class="stat-group">
+        <span class="stat-lbl">RAD</span>
+        <div class="bar-wrap"><div id="rad-bar" class="bar rad-bar"></div></div>
+        <span id="rad-text" class="stat-val">0</span>
+      </div>
+      <div class="stat-group">
+        <span class="stat-lbl">COLD</span>
+        <div class="bar-wrap"><div id="cold-bar" class="bar cold-bar"></div></div>
+        <span id="cold-text" class="stat-val">0</span>
+      </div>
+      <div class="stat-pill">ХОД&nbsp;<span id="turn-text" class="amber">1</span></div>
+      <div class="stat-pill">БРОНЯ&nbsp;<span id="armor-text">0</span></div>
+      <div class="stat-pill">ОРУЖИЕ&nbsp;<span id="weapon-text">Кулаки</span></div>
+      <div class="stat-pill dim">POS&nbsp;<span id="pos-text">0,0</span></div>
+    </div>
+
+    <!-- Right panel -->
+    <div id="right-panel">
+
+      <!-- Minimap -->
+      <div class="panel-title">[ КАРТА ]</div>
+      <canvas id="minimap" width="240" height="140"></canvas>
+
+      <!-- Inventory -->
+      <div class="panel-title">[ ИНВЕНТАРЬ ]</div>
+      <div id="inventory-slots"></div>
+
+      <div class="panel-section">СНАРЯЖЕНИЕ</div>
+      <div id="equipment-slots">
+        <div class="equip-row">
+          <span class="eq-lbl">ОРУЖИЕ:</span>
+          <span id="equip-weapon" class="eq-val">—</span>
+        </div>
+        <div class="equip-row">
+          <span class="eq-lbl">БРОНЯ:</span>
+          <span id="equip-armor" class="eq-val">—</span>
+        </div>
+        <div class="equip-row">
+          <span class="eq-lbl">ГОЛОВА:</span>
+          <span id="equip-head" class="eq-val">—</span>
+        </div>
+      </div>
+      <div class="panel-hint">ПКМ — надеть/использовать&nbsp;|&nbsp;[1–0] быстро</div>
+
+      <!-- Log -->
+      <div class="panel-title">[ ЛОГ ]</div>
+      <div id="log-entries"></div>
+    </div>
+
+    <!-- Bottom help bar -->
+    <div id="help-bar">
+      WASD/←↑↓→ Движение &nbsp;·&nbsp; QE/ZC диагонали &nbsp;·&nbsp; F/Пробел Подобрать &nbsp;·&nbsp; [1–0] Использовать предмет
+    </div>
+
+    <!-- Pickup prompt -->
+    <div id="pickup-prompt" class="hidden">
+      <span id="pickup-text">Подобрать: ? [F / Пробел]</span>
+    </div>
+
+    <!-- Combat overlay -->
+    <div id="combat-overlay" class="hidden">
+      <div id="combat-panel">
+        <div class="combat-title" id="combat-title">БОЙ</div>
+        <div id="combat-combatants">
+          <div class="fighter">
+            <div class="fighter-name">ИГРОК</div>
+            <div class="fighter-hp" id="player-combat-hp">100/100</div>
+          </div>
+          <div class="combat-vs">⚔</div>
+          <div class="fighter">
+            <div class="fighter-name" id="enemy-combat-name">ВРАГ</div>
+            <div class="fighter-hp" id="enemy-combat-hp">30/30</div>
+          </div>
+        </div>
+        <div id="combat-log"></div>
+        <div id="combat-actions">
+          <button class="cbtn" id="btn-attack">⚔ АТАКА</button>
+          <button class="cbtn" id="btn-item">💊 ПРЕДМЕТ</button>
+          <button class="cbtn" id="btn-flee">↩ ОТСТУПИТЬ</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /hud -->
+
+  <!-- Start screen -->
+  <div id="start-screen">
+    <div id="start-box">
+      <div id="title-top">◈ &nbsp; Сектор Б-7 &nbsp; ◈</div>
+      <div id="game-title">СЕВЕРНЫЙ РУБЕЖ</div>
+      <div id="game-sub">АЛЬТЕРНАТИВНЫЕ 50-е · ЗОНА ОТЧУЖДЕНИЯ · РЕТРОФУТУРИЗМ</div>
+      <div id="start-hint" class="blink">[ НАЖМИТЕ ЛЮБУЮ КЛАВИШУ ИЛИ КЛИКНИТЕ ]</div>
+      <div id="start-loading" class="hidden amber blink">ГЕНЕРАЦИЯ КАРТЫ 300 × 220…</div>
+      <div id="start-credits">v0.1 MVP</div>
+    </div>
+  </div>
+
+</div><!-- /game-wrapper -->
+
+<script src="js/config.js"></script>
+<script src="js/hex.js"></script>
+<script src="js/map.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/combat.js"></script>
+<script src="js/renderer.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

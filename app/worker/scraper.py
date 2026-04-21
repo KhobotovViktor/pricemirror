@@ -104,6 +104,10 @@ def _resolve_store_domain(domain: str) -> str:
 # block automated selectors). For these, skip straight to JS eval + og:image.
 JS_EVAL_ONLY_DOMAINS = {"divan.ru", "bestmebelshop.ru"}
 
+# Domains where wait_until="load" hangs forever (SPA sites with infinite background
+# requests). Use "domcontentloaded" + extra sleep to let JS render instead.
+DOMCONTENTLOADED_DOMAINS = {"divan.ru"}
+
 # Per-URL scrape timeout (seconds). Prevents any single page from hanging the scan.
 SCRAPE_TIMEOUT_SEC = 90
 
@@ -422,11 +426,14 @@ async def scrape_product_details(url: str):
                 except Exception as e:
                     print(f"[{domain}] Warmup failed (non-fatal): {e}")
 
-            # Use 'load' for all sites — networkidle hangs on pages with
-            # continuous background requests (analytics, ads, chat widgets)
-            response = await page.goto(url, wait_until="load", timeout=60000)
-            wait_time = 2
-            await asyncio.sleep(wait_time)
+            # SPA sites (divan.ru) never fire the load event due to infinite background
+            # requests — use domcontentloaded + extra sleep for React to render.
+            if domain in DOMCONTENTLOADED_DOMAINS:
+                response = await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                await asyncio.sleep(5)
+            else:
+                response = await page.goto(url, wait_until="load", timeout=60000)
+                await asyncio.sleep(2)
 
             # Prevent scraping a captcha or forbidden page
             if response and response.status in (401, 403, 404, 429, 500, 502, 503):
@@ -446,15 +453,28 @@ async def scrape_product_details(url: str):
 
             # Check for bot protection / captcha
             page_text = await asyncio.wait_for(page.evaluate("() => document.body.innerText"), timeout=15)
-            if "403 Error" in page_text or ("Доступ к сайту" in page_text and "запрещен" in page_text):
+            _pt_lower = page_text.lower()
+            # Hard-stop patterns — page is definitely a bot challenge, no price here
+            BOT_STOP_PHRASES = [
+                "403 error",
+                "вы не робот",
+                "не являетесь роботом",
+                "i'm not a robot",
+                "verify you are human",
+                "checking your browser",
+                "enable javascript and cookies",
+            ]
+            if (("доступ к сайту" in _pt_lower and "запрещен" in _pt_lower)
+                    or any(p in _pt_lower for p in BOT_STOP_PHRASES)):
                 print(f"[{domain}] Bot protection detected, aborting.")
                 return {'price': None, 'image_url': None}
-            if "подозрительн" in page_text.lower():
+            if "подозрительн" in _pt_lower:
                 print(f"[{domain}] Captcha/suspicious activity page, waiting 10s...")
                 await asyncio.sleep(10)
                 # Re-check after wait (some captchas auto-solve)
                 page_text = await asyncio.wait_for(page.evaluate("() => document.body.innerText"), timeout=15)
-                if "подозрительн" in page_text.lower():
+                _pt_lower = page_text.lower()
+                if "подозрительн" in _pt_lower or any(p in _pt_lower for p in BOT_STOP_PHRASES):
                     print(f"[{domain}] Still captcha, aborting.")
                     return {'price': None, 'image_url': None}
             

@@ -102,7 +102,10 @@ def _resolve_store_domain(domain: str) -> str:
 
 # Domains where CSS selector probing consistently fails (SPA/React sites that
 # block automated selectors). For these, skip straight to JS eval + og:image.
-JS_EVAL_ONLY_DOMAINS = {"divan.ru"}
+JS_EVAL_ONLY_DOMAINS = {"divan.ru", "bestmebelshop.ru"}
+
+# Per-URL scrape timeout (seconds). Prevents any single page from hanging the scan.
+SCRAPE_TIMEOUT_SEC = 90
 
 # Phone number patterns to reject as false-positive prices
 _PHONE_PATTERNS = [
@@ -442,7 +445,7 @@ async def scrape_product_details(url: str):
             print(f"[{domain}] Loaded: '{page_title[:60]}'")
 
             # Check for bot protection / captcha
-            page_text = await page.evaluate("() => document.body.innerText")
+            page_text = await page.evaluate("() => document.body.innerText", timeout=15000)
             if "403 Error" in page_text or ("Доступ к сайту" in page_text and "запрещен" in page_text):
                 print(f"[{domain}] Bot protection detected, aborting.")
                 return {'price': None, 'image_url': None}
@@ -450,7 +453,7 @@ async def scrape_product_details(url: str):
                 print(f"[{domain}] Captcha/suspicious activity page, waiting 10s...")
                 await asyncio.sleep(10)
                 # Re-check after wait (some captchas auto-solve)
-                page_text = await page.evaluate("() => document.body.innerText")
+                page_text = await page.evaluate("() => document.body.innerText", timeout=15000)
                 if "подозрительн" in page_text.lower():
                     print(f"[{domain}] Still captcha, aborting.")
                     return {'price': None, 'image_url': None}
@@ -529,19 +532,13 @@ async def scrape_product_details(url: str):
             if not price:
                 try:
                     js_price = await page.evaluate('''() => {
-                        // Helper: parse price string preserving decimals, then round
                         function parsePrice(val) {
                             const s = String(val).trim();
-                            // If value looks like a float (e.g. "3392.00"), parse as float
                             const f = parseFloat(s.replace(/[^0-9.]/g, '').replace(/\.(?=.*\.)/g, ''));
                             return isNaN(f) ? null : Math.round(f);
                         }
-
-                        // Method 1: Schema.org meta tag
                         const meta = document.querySelector('meta[itemprop="price"]');
                         if (meta && meta.content) { const p = parsePrice(meta.content); if (p) return p; }
-
-                        // Method 2: JSON-LD structured data
                         const scripts = document.querySelectorAll('script[type="application/ld+json"]');
                         for (const s of scripts) {
                             try {
@@ -559,16 +556,13 @@ async def scrape_product_details(url: str):
                                 }
                             } catch(e) {}
                         }
-
-                        // Method 3: itemprop="price" on any element
                         const priceEl = document.querySelector('[itemprop="price"]');
                         if (priceEl) {
                             const p = parsePrice(priceEl.content || priceEl.textContent);
                             if (p) return p;
                         }
-                        
                         return null;
-                    }''')
+                    }''', timeout=20000)
                     if js_price and js_price > 100:
                         if _validate_price(js_price, domain):
                             price = js_price
@@ -578,21 +572,8 @@ async def scrape_product_details(url: str):
                 except Exception as e:
                     print(f"[{domain}] JS price extraction error: {e}")
 
-            # 4. OCR Fallback — ONLY if all other methods failed
-            if not price:
-                reader = get_ocr_reader()
-                if reader:
-                    print(f"[{domain}] Trying OCR fallback...")
-                    screenshot_bytes = await page.screenshot(full_page=False)
-                    nparr = np.frombuffer(screenshot_bytes, np.uint8)
-                    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-                    results = reader.readtext(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
-                    prices = [int(re.search(r'(\d{3,})', res[1].replace(" ","")).group(1))
-                              for res in results if re.search(r'(\d{3,})', res[1].replace(" ",""))]
-                    valid = [p for p in prices if _validate_price(p, domain)]
-                    if valid:
-                        price = min(valid)
-                        print(f"[{domain}] OCR price: {price}")
+            # OCR fallback removed: EasyOCR is synchronous and blocks the event loop
+            # for 30-120s per page, causing the entire scan to freeze.
 
             if not price:
                 print(f"[{domain}] Failed to find price on {url}")
@@ -741,9 +722,16 @@ async def scrape_our_product_price(product_id: int):
 _SCRAPE_SEMAPHORE = asyncio.Semaphore(2)
 
 async def _scrape_mapping_safe(cm: dict, our_prod: dict):
-    """Scrape a single competitor mapping with semaphore guard."""
+    """Scrape a single competitor mapping with semaphore guard and hard timeout."""
     async with _SCRAPE_SEMAPHORE:
-        details = await scrape_product_details(cm['url'])
+        try:
+            details = await asyncio.wait_for(
+                scrape_product_details(cm['url']),
+                timeout=SCRAPE_TIMEOUT_SEC
+            )
+        except asyncio.TimeoutError:
+            print(f"[scraper] TIMEOUT ({SCRAPE_TIMEOUT_SEC}s) scraping {cm['url']} — skipping")
+            return
 
     if details['image_url']:
         supabase.table("competitor_product").update({"image_url": details['image_url']}).eq("id", cm['id']).execute()

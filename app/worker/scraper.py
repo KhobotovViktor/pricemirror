@@ -445,7 +445,7 @@ async def scrape_product_details(url: str):
             print(f"[{domain}] Loaded: '{page_title[:60]}'")
 
             # Check for bot protection / captcha
-            page_text = await page.evaluate("() => document.body.innerText", timeout=15000)
+            page_text = await asyncio.wait_for(page.evaluate("() => document.body.innerText"), timeout=15)
             if "403 Error" in page_text or ("Доступ к сайту" in page_text and "запрещен" in page_text):
                 print(f"[{domain}] Bot protection detected, aborting.")
                 return {'price': None, 'image_url': None}
@@ -453,7 +453,7 @@ async def scrape_product_details(url: str):
                 print(f"[{domain}] Captcha/suspicious activity page, waiting 10s...")
                 await asyncio.sleep(10)
                 # Re-check after wait (some captchas auto-solve)
-                page_text = await page.evaluate("() => document.body.innerText", timeout=15000)
+                page_text = await asyncio.wait_for(page.evaluate("() => document.body.innerText"), timeout=15)
                 if "подозрительн" in page_text.lower():
                     print(f"[{domain}] Still captcha, aborting.")
                     return {'price': None, 'image_url': None}
@@ -531,7 +531,7 @@ async def scrape_product_details(url: str):
             # 3. JavaScript price extraction fallback (for SPA sites)
             if not price:
                 try:
-                    js_price = await page.evaluate('''() => {
+                    js_price = await asyncio.wait_for(page.evaluate('''() => {
                         function parsePrice(val) {
                             const s = String(val).trim();
                             const f = parseFloat(s.replace(/[^0-9.]/g, '').replace(/\.(?=.*\.)/g, ''));
@@ -562,7 +562,7 @@ async def scrape_product_details(url: str):
                             if (p) return p;
                         }
                         return null;
-                    }''', timeout=20000)
+                    }'''), timeout=20)
                     if js_price and js_price > 100:
                         if _validate_price(js_price, domain):
                             price = js_price

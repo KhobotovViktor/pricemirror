@@ -1,5 +1,6 @@
 import asyncio
 import sys
+import time as _time
 
 # Critical fix for Windows: ProactorEventLoop is required for playwright subprocesses
 if sys.platform == 'win32':
@@ -293,6 +294,14 @@ async def _scrape_hoff_playwright(url: str) -> dict:
             title = await page.title()
             print(f"[hoff.ru/playwright] Loaded: '{title[:60]}'")
 
+            # Detect redirect to homepage (Qrator rejected the request entirely)
+            final_url = page.url
+            parsed_orig = urllib.parse.urlparse(url)
+            parsed_final = urllib.parse.urlparse(final_url)
+            if parsed_final.path in ("/", "") and parsed_orig.path not in ("/", ""):
+                print(f"[hoff.ru/playwright] Redirected to homepage — product blocked or gone: {url}")
+                return {"price": None, "image_url": None}
+
             price = None
             image_url = None
 
@@ -452,7 +461,10 @@ async def scrape_product_details(url: str):
             print(f"[{domain}] Loaded: '{page_title[:60]}'")
 
             # Check for bot protection / captcha
-            page_text = await asyncio.wait_for(page.evaluate("() => document.body.innerText"), timeout=15)
+            # Guard against null body (non-HTML pages, frames not yet attached)
+            page_text = await asyncio.wait_for(
+                page.evaluate("() => document.body ? document.body.innerText : ''"), timeout=15
+            )
             _pt_lower = page_text.lower()
             # Hard-stop patterns — page is definitely a bot challenge, no price here
             BOT_STOP_PHRASES = [
@@ -472,7 +484,9 @@ async def scrape_product_details(url: str):
                 print(f"[{domain}] Captcha/suspicious activity page, waiting 10s...")
                 await asyncio.sleep(10)
                 # Re-check after wait (some captchas auto-solve)
-                page_text = await asyncio.wait_for(page.evaluate("() => document.body.innerText"), timeout=15)
+                page_text = await asyncio.wait_for(
+                    page.evaluate("() => document.body ? document.body.innerText : ''"), timeout=15
+                )
                 _pt_lower = page_text.lower()
                 if "подозрительн" in _pt_lower or any(p in _pt_lower for p in BOT_STOP_PHRASES):
                     print(f"[{domain}] Still captcha, aborting.")
@@ -741,6 +755,30 @@ async def scrape_our_product_price(product_id: int):
 # Limit concurrent browser instances to avoid overload / rate limiting
 _SCRAPE_SEMAPHORE = asyncio.Semaphore(2)
 
+
+def _db_write(fn, label: str = "") -> bool:
+    """Execute a Supabase write with one retry on SSL/EOF errors.
+    Returns True on success, False if all attempts failed.
+    Never raises — DB write failures must not crash the scan.
+    """
+    for attempt in range(2):
+        try:
+            fn()
+            return True
+        except Exception as e:
+            err = str(e)
+            is_ssl = "EOF" in err or "SSL" in err or "ssl" in err or "ConnectError" in err
+            if attempt == 0 and is_ssl:
+                tag = f" ({label})" if label else ""
+                print(f"[DB] SSL error{tag}, retrying in 3s: {e}")
+                _time.sleep(3)
+                continue
+            tag = f" ({label})" if label else ""
+            print(f"[DB] Write error{tag}: {e}")
+            return False
+    return False
+
+
 async def _scrape_mapping_safe(cm: dict, our_prod: dict):
     """Scrape a single competitor mapping with semaphore guard and hard timeout."""
     async with _SCRAPE_SEMAPHORE:
@@ -753,35 +791,50 @@ async def _scrape_mapping_safe(cm: dict, our_prod: dict):
             print(f"[scraper] TIMEOUT ({SCRAPE_TIMEOUT_SEC}s) scraping {cm['url']} — skipping")
             return
 
-    if details['image_url']:
-        supabase.table("competitor_product").update({"image_url": details['image_url']}).eq("id", cm['id']).execute()
-        # Also fill our product image if it's missing
-        if not our_prod.get('image_url'):
-            supabase.table("our_product").update({"image_url": details['image_url']}).eq("id", our_prod['id']).execute()
-            our_prod["image_url"] = details['image_url']
+    try:
+        if details['image_url']:
+            _db_write(
+                lambda: supabase.table("competitor_product").update({"image_url": details['image_url']}).eq("id", cm['id']).execute(),
+                "competitor image"
+            )
+            # Also fill our product image if it's missing
+            if not our_prod.get('image_url'):
+                _db_write(
+                    lambda: supabase.table("our_product").update({"image_url": details['image_url']}).eq("id", our_prod['id']).execute(),
+                    "our image"
+                )
+                our_prod["image_url"] = details['image_url']
 
-    if details['price']:
-        supabase.table("price_record").insert({
-            "competitor_product_id": cm['id'],
-            "price": details['price'],
-            "created_at": datetime.now(MSK).isoformat()
-        }).execute()
+        if details['price']:
+            _db_write(
+                lambda: supabase.table("price_record").insert({
+                    "competitor_product_id": cm['id'],
+                    "price": details['price'],
+                    "created_at": datetime.now(MSK).isoformat()
+                }).execute(),
+                "price_record"
+            )
 
-        old_last_price = float(cm['last_price']) if cm.get('last_price') else None
+            old_last_price = float(cm['last_price']) if cm.get('last_price') else None
 
-        supabase.table("competitor_product").update({
-            "last_price": details['price'],
-            "last_scrape": datetime.now(MSK).isoformat()
-        }).eq("id", cm['id']).execute()
+            _db_write(
+                lambda: supabase.table("competitor_product").update({
+                    "last_price": details['price'],
+                    "last_scrape": datetime.now(MSK).isoformat()
+                }).eq("id", cm['id']).execute(),
+                "last_price"
+            )
 
-        if our_prod.get('current_price') and details['price'] < float(our_prod['current_price']):
-            notifier.send_price_alert(our_prod['name'], our_prod['current_price'], details['price'], cm['url'])
+            if our_prod.get('current_price') and details['price'] < float(our_prod['current_price']):
+                notifier.send_price_alert(our_prod['name'], our_prod['current_price'], details['price'], cm['url'])
 
-        # Alert on competitor price INCREASE (>5% rise = margin opportunity)
-        if old_last_price and details['price'] > old_last_price:
-            increase_pct = (details['price'] - old_last_price) / old_last_price * 100
-            if increase_pct >= 5:
-                notifier.send_price_increase_alert(our_prod['name'], old_last_price, details['price'], cm['url'])
+            # Alert on competitor price INCREASE (>5% rise = margin opportunity)
+            if old_last_price and details['price'] > old_last_price:
+                increase_pct = (details['price'] - old_last_price) / old_last_price * 100
+                if increase_pct >= 5:
+                    notifier.send_price_increase_alert(our_prod['name'], old_last_price, details['price'], cm['url'])
+    except Exception as e:
+        print(f"[scraper] DB write error for {cm['url']}: {e}")
 
 
 async def monitor_all():

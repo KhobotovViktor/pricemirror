@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AR-примерочная — демо (Аллея Мебели)</title>
+
+<!-- model-viewer: open-source, бесплатный веб-компонент от Google.
+     В реальной карточке Битрикса подключается этой же строкой. -->
+<script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+
+<style>
+  :root{
+    --accent:#6366f1; --ink:#1e2230; --muted:#6b7280; --line:#e7e9ef; --bg:#f5f6fa;
+    --ok:#16a34a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  .wrap{max-width:980px;margin:0 auto;padding:18px}
+  .badge{display:inline-block;background:#eef0ff;color:var(--accent);font-size:12px;font-weight:600;
+         padding:4px 10px;border-radius:999px;margin-bottom:12px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;
+        box-shadow:0 8px 30px rgba(20,24,40,.06);display:grid;grid-template-columns:1.15fr .85fr}
+  @media(max-width:760px){.card{grid-template-columns:1fr}}
+
+  .viewer{position:relative;background:radial-gradient(120% 120% at 50% 15%,#fff, #eef0f6);min-height:420px}
+  model-viewer{width:100%;height:100%;min-height:420px;--poster-color:transparent}
+
+  .loaderr{position:absolute;inset:0;display:none;place-items:center;text-align:center;padding:24px;
+           color:var(--muted);font-size:14px}
+  .loaderr code{background:#f1f2f6;padding:2px 6px;border-radius:6px}
+
+  .info{padding:24px 24px 26px;border-left:1px solid var(--line)}
+  @media(max-width:760px){.info{border-left:none;border-top:1px solid var(--line)}}
+  h1{font-size:20px;margin:.2em 0 .1em}
+  .hit{display:inline-block;background:#fff3e0;color:#c2410c;font-size:11px;font-weight:700;
+       padding:3px 8px;border-radius:6px;margin-bottom:8px}
+  .price{font-size:26px;font-weight:800;margin:10px 0 2px}
+  .price .old{font-size:15px;color:var(--muted);font-weight:500;text-decoration:line-through;margin-left:8px}
+  .bonus{color:var(--ok);font-size:13px;margin-bottom:16px}
+
+  .label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 8px}
+  .dims{display:flex;gap:18px;font-size:14px}
+  .dims b{display:block;font-size:17px}
+  .dims span{color:var(--muted);font-size:12px}
+
+  .swatches{display:flex;gap:10px;flex-wrap:wrap}
+  .sw{width:38px;height:38px;border-radius:50%;border:2px solid #fff;cursor:pointer;
+      box-shadow:0 0 0 1px var(--line);transition:transform .12s}
+  .sw:hover{transform:scale(1.08)}
+  .sw.active{box-shadow:0 0 0 2px var(--accent)}
+  .sw-name{font-size:13px;color:var(--muted);margin-top:8px;min-height:18px}
+
+  .arbtn{margin-top:22px;width:100%;border:none;border-radius:12px;background:var(--accent);color:#fff;
+         font-size:16px;font-weight:700;padding:15px;cursor:pointer;display:flex;gap:10px;
+         align-items:center;justify-content:center}
+  .arbtn:active{transform:translateY(1px)}
+  .arhint{font-size:12px;color:var(--muted);margin-top:10px;text-align:center;line-height:1.5}
+  .cart{margin-top:10px;width:100%;border:1px solid var(--line);background:#fff;border-radius:12px;
+        padding:13px;font-size:15px;font-weight:600;cursor:pointer}
+
+  .note{max-width:980px;margin:14px auto 0;font-size:12.5px;color:var(--muted);line-height:1.6}
+  .ev{max-width:980px;margin:10px auto 0;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;
+      background:#0e1117;color:#9be29b;border-radius:12px;padding:12px 14px;min-height:42px}
+  .ev b{color:#fff;font-family:inherit}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <span class="badge">AR-примерочная · демо</span>
+
+  <div class="card">
+    <!-- ЛЕВО: 3D / AR -->
+    <div class="viewer">
+      <model-viewer id="mv"
+        alt="Диван — 3D-модель"
+        ar ar-modes="webxr scene-viewer quick-look" ar-scale="fixed"
+        camera-controls auto-rotate touch-action="pan-y"
+        shadow-intensity="1" exposure="1.05" environment-image="neutral"
+        loading="eager">
+      </model-viewer>
+      <div class="loaderr" id="loaderr">
+        Тестовая модель не загрузилась.<br>Замените <code>MODEL_URLS</code> в коде на ссылку вашей модели.
+      </div>
+    </div>
+
+    <!-- ПРАВО: карточка (как в Битриксе) -->
+    <div class="info">
+      <span class="hit">ХИТ</span>
+      <h1 id="pName">Диван «Монреаль» угловой</h1>
+      <div class="price"><span id="pPrice">59 900 ₽</span><span class="old" id="pOld">71 900 ₽</span></div>
+      <div class="bonus">+ 1 797 бонусов на счёт</div>
+
+      <div class="label">Размеры (реальный масштаб в AR)</div>
+      <div class="dims">
+        <div><b id="dW">258</b><span>ширина, см</span></div>
+        <div><b id="dD">168</b><span>глубина, см</span></div>
+        <div><b id="dH">88</b><span>высота, см</span></div>
+      </div>
+
+      <div class="label">Цвет обивки</div>
+      <div class="swatches" id="swatches"></div>
+      <div class="sw-name" id="swName">—</div>
+
+      <button class="arbtn" id="arBtn">📱 Посмотреть в комнате</button>
+      <div class="arhint" id="arHint">Покрутите мышью. На Android-телефоне кнопка откроет камеру и поставит диван на пол.</div>
+
+      <button class="cart">В корзину</button>
+    </div>
+  </div>
+
+  <div class="ev" id="ev"><b>Аналитика:</b> события Метрики появятся здесь и в консоли (F12) →</div>
+
+  <p class="note">
+    Это демо на стоковой 3D-модели. В бою сюда встаёт модель вашего дивана (<code>.glb</code> для Android,
+    <code>.usdz</code> для iOS). Переключатели цвета тонируют ткань модели — связываются с вашим выбором обивки.
+    Реальная AR-камера на телефоне требует, чтобы страница открывалась по <b>https</b> (с сервера),
+    а из локального файла работают 3D-просмотр и переключение цвета.
+  </p>
+</div>
+
+<script>
+/* ============================ НАСТРОЙКИ (правится здесь) ============================ */
+
+// Цепочка моделей: если первая не загрузится — берётся следующая. Замените на свою .glb.
+const MODEL_URLS = [
+  "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/GlamVelvetSofa/glTF-Binary/GlamVelvetSofa.glb", // диван
+  "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/SheenChair/glTF-Binary/SheenChair.glb",          // кресло (запас)
+  "https://modelviewer.dev/shared-assets/models/Mixer.glb"                                                                         // гарантированный запас
+];
+
+// ID счётчика Яндекс.Метрики. Вставьте свой — и события пойдут в Метрику (цель `ar_view`).
+const YM_ID = null;
+
+// Палитра обивки: f — множитель цвета (linear RGB), которым тонируется ткань модели.
+const SWATCHES = [
+  { name:"Графитовый", css:"#5b6068", f:[0.22,0.24,0.28] },
+  { name:"Бежевый",    css:"#cbb79a", f:[0.62,0.50,0.36] },
+  { name:"Синий",      css:"#3f5d8a", f:[0.10,0.17,0.34] },
+  { name:"Терракот",   css:"#a8543a", f:[0.40,0.11,0.07] }
+];
+
+/* ================================================================================== */
+
+const mv = document.getElementById('mv');
+const evBox = document.getElementById('ev');
+
+// --- Аналитика: одна функция и для Метрики, и для лога на экране ---
+function track(goal, extra){
+  if (typeof window.ym === 'function' && YM_ID) window.ym(YM_ID, 'reachGoal', goal, extra || {});
+  console.log('[Metrika reachGoal]', goal, extra || '');
+  const t = new Date().toLocaleTimeString('ru-RU');
+  evBox.innerHTML = `<b>${t}</b> → reachGoal('<b>${goal}</b>')` + (extra ? ' ' + JSON.stringify(extra) : '');
+}
+
+// --- Загрузка модели с авто-фолбэком ---
+let mIdx = 0;
+mv.src = MODEL_URLS[0];
+mv.addEventListener('error', () => {
+  if (mIdx < MODEL_URLS.length - 1){ mIdx++; mv.src = MODEL_URLS[mIdx]; }
+  else { document.getElementById('loaderr').style.display = 'grid'; }
+});
+
+// --- Когда модель готова: настраиваем переключатели ткани ---
+let targetMat = null;
+mv.addEventListener('load', () => {
+  const mats = (mv.model && mv.model.materials) || [];
+  // имена материалов — в консоли, чтобы при желании подправить выбор
+  console.log('Материалы модели:', mats.map(m => m.name));
+  targetMat = mats.find(m => /fabric|cloth|seat|sofa|cushion|velvet|textile|base/i.test(m.name || '')) || mats[0];
+  buildSwatches();
+  // подсказка про доступность AR
+  const hint = document.getElementById('arHint');
+  hint.textContent = mv.canActivateAR
+    ? 'Нажмите — откроется камера и диван встанет на пол в реальном размере.'
+    : 'Покрутите мышью. Настоящая AR-камера доступна на телефоне (Android/iOS) при открытии по https.';
+});
+
+function buildSwatches(){
+  const box = document.getElementById('swatches');
+  const nameEl = document.getElementById('swName');
+  box.innerHTML = '';
+  SWATCHES.forEach((s, i) => {
+    const b = document.createElement('div');
+    b.className = 'sw' + (i === 0 ? ' active' : '');
+    b.style.background = s.css;
+    b.title = s.name;
+    b.onclick = () => {
+      document.querySelectorAll('.sw').forEach(e => e.classList.remove('active'));
+      b.classList.add('active');
+      nameEl.textContent = s.name;
+      if (targetMat) targetMat.pbrMetallicRoughness.setBaseColorFactor([...s.f, 1]);
+      track('ar_fabric_change', { color: s.name });
+    };
+    box.appendChild(b);
+  });
+  nameEl.textContent = SWATCHES[0].name;
+  if (targetMat) targetMat.pbrMetallicRoughness.setBaseColorFactor([...SWATCHES[0].f, 1]);
+}
+
+// --- Кнопка "Посмотреть в комнате" ---
+document.getElementById('arBtn').addEventListener('click', () => {
+  track('ar_view');                 // ← ключевая цель для расчёта ROI через сквозную аналитику
+  if (mv.canActivateAR) mv.activateAR();
+});
+
+// фиксируем реальный запуск AR-сессии отдельной целью
+mv.addEventListener('ar-status', (e) => {
+  if (e.detail.status === 'session-started') track('ar_session_started');
+});
+</script>
+</body>
+</html>
